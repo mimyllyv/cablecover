@@ -152,16 +152,32 @@ export class RailSystem {
                     const t = (i + 0.5) / params.holeCount;
                     pos.copy(path.getPointAt(t));
                     
-                    if (params.turnAxis === 'vertical') {
-                        // Align Y -> X
-                        quat.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI / 2);
-                    } else {
-                        // Horizontal: Align with Curve Normal
-                        const tangent = path.getTangentAt(t);
-                        const normal = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
-                        quat.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
-                    }
-                } else {
+                                    if (params.turnAxis === 'vertical') {
+                                        // Align Y -> X
+                                        quat.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI / 2);
+                                        // Shift 'Lower' (World -Y). In CSG frame (rotated -90 Z), -Y becomes -X.
+                                        // So shift along -X.
+                                        pos.x -= 3.0;
+                                    } else {
+                                        // Horizontal: Align with Curve Normal
+                                        const tangent = path.getTangentAt(t);
+                                        const normal = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+                                        // User feedback suggests removing the -90 correction for orientation.
+                                        // normal.applyAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+                                        
+                                        quat.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+                                        
+                                                            // Shift 'Lower' (World -Y). 
+                                        
+                                                            // In Horizontal Mode, the 'Normal' vector becomes the Vertical vector after +90 Z rotation.
+                                        
+                                                            // User feedback indicates -3.0 made it worse, implying direction was flipped.
+                                        
+                                                            // Reversing to +3.0.
+                                        
+                                                            pos.addScaledVector(normal, 3.0);
+                                        
+                                                        }                } else {
                     // Straight Mode
                     const step = params.length / params.holeCount;
                     const zPos = -params.length / 2 + step * (i + 0.5);
