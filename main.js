@@ -198,13 +198,22 @@ function updateShapes() {
                     // Cylinder is Y-up by default. Rotate Y to X -> -90 deg around Z.
                     holeQuat.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI / 2);
                 } else {
-                    // Horizontal Turn: Perpendicular to floor.
-                    // The floor stays at the "Normal" or "Up" frame.
-                    // As before, we calculated upVec and applied -90 Z.
+                    // Horizontal Turn: User wants holes to rotate with the angle.
+                    // This implies holes are aligned with the Path Normal (which rotates in XZ plane).
+                    // Tangent T is in XZ. Binormal B is Y (0,1,0).
+                    // Normal N = B x T (or T x B).
+                    // Straight case: T=(0,0,1). Hole should be along X? (If it rotates).
+                    // Let's assume Hole is along Normal.
+                    
                     let tangent = path.getTangentAt(t);
-                    let upVec = new THREE.Vector3(0, 1, 0); // Horizontal turn Up is Y
-                    upVec.applyAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
-                    holeQuat.setFromUnitVectors(new THREE.Vector3(0,1,0), upVec);
+                    let upRef = new THREE.Vector3(0, 1, 0); 
+                    let normal = new THREE.Vector3().crossVectors(tangent, upRef).normalize();
+                    
+                    // User feedback suggests removing the -90 correction aligns the start holes correctly (Vertical)
+                    // while keeping end holes correct (Horizontal).
+                    // normal.applyAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+                    
+                    holeQuat.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
                 }
 
                 const holeBrush = new Brush(cylinderGeo, material);
