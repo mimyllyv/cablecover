@@ -14,7 +14,7 @@ export class RailSystem {
     constructor(scene) {
         this.scene = scene;
         this.csgEvaluator = new Evaluator();
-        
+
         this.materials = {
             rail: new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide }),
             cover: new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide }),
@@ -55,16 +55,16 @@ export class RailSystem {
     clearMeshes() {
         if (this.meshes.rail) {
             this.scene.remove(this.meshes.rail);
-            if(this.meshes.rail.geometry) this.meshes.rail.geometry.dispose();
+            if (this.meshes.rail.geometry) this.meshes.rail.geometry.dispose();
             this.meshes.rail = null;
         }
         if (this.meshes.cover) {
             this.scene.remove(this.meshes.cover);
-            if(this.meshes.cover.geometry) this.meshes.cover.geometry.dispose();
+            if (this.meshes.cover.geometry) this.meshes.cover.geometry.dispose();
             this.meshes.cover = null;
         }
         this.meshes.visuals.forEach(mesh => {
-            if(mesh.geometry) mesh.geometry.dispose();
+            if (mesh.geometry) mesh.geometry.dispose();
             this.scene.remove(mesh);
         });
         this.meshes.visuals = [];
@@ -73,42 +73,42 @@ export class RailSystem {
     createRoundedPath(l1, l2, angleDeg, r, axis) {
         const theta = (angleDeg * Math.PI) / 180;
         const tanDist = r * Math.tan(theta / 2);
-        
+
         if (l1 < tanDist || l2 < tanDist) {
             console.warn("Lengths too short for radius/angle");
         }
-    
+
         const path = new THREE.CurvePath();
-    
+
         // Start at (0,0,0) facing +Z
-        const start = new THREE.Vector3(0,0,0);
+        const start = new THREE.Vector3(0, 0, 0);
         const seg1Len = Math.max(0, l1 - tanDist);
         const p1 = new THREE.Vector3(0, 0, seg1Len);
-        
+
         path.add(new THREE.LineCurve3(start, p1));
-    
+
         // Corner
         const pCorner = new THREE.Vector3(0, 0, l1);
         let dir2;
-        
+
         if (axis === 'vertical') {
             dir2 = new THREE.Vector3(0, Math.sin(theta), Math.cos(theta));
         } else {
             dir2 = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
         }
-        
-        const p2 = pCorner.clone().add(dir2.clone().multiplyScalar(tanDist)); 
+
+        const p2 = pCorner.clone().add(dir2.clone().multiplyScalar(tanDist));
         path.add(new THREE.QuadraticBezierCurve3(p1, pCorner, p2));
-    
+
         // Line 2
         const seg2Len = Math.max(0, l2 - tanDist);
         const end = p2.clone().add(dir2.clone().multiplyScalar(seg2Len));
         path.add(new THREE.LineCurve3(p2, end));
-    
+
         return path;
     }
 
-    generate(params) {
+    generate(params, skipHoles = false) {
         if (!this.shapes.rail || !this.shapes.cover) return;
 
         this.clearMeshes();
@@ -136,7 +136,7 @@ export class RailSystem {
         }
 
         // --- Hole Logic ---
-        if (params.holeCount > 0 && params.holeDiameter > 0) {
+        if (!skipHoles && params.holeCount > 0 && params.holeDiameter > 0) {
             let railBrush = new Brush(railGeometry, this.materials.rail);
             railBrush.updateMatrixWorld();
             
@@ -212,71 +212,33 @@ export class RailSystem {
     exportSTL(type) {
         const mesh = type === 'rail' ? this.meshes.rail : this.meshes.cover;
         if (!mesh) return;
-    
+
         const exportMesh = mesh.clone();
+        // Crucial: Clone geometry because mesh.clone() shares the same geometry instance.
+        // If we don't clone, applyMatrix4 will rotate the visible model in the scene.
+        if (exportMesh.geometry) {
+            exportMesh.geometry = exportMesh.geometry.clone();
+        }
+
         exportMesh.clear(); // Remove children (cutters)
-        
+
         if (!exportMesh.geometry) return;
-    
         // Rotate +90 X for printing orientation
         exportMesh.rotation.x += Math.PI / 2;
         exportMesh.updateMatrixWorld();
         exportMesh.geometry.applyMatrix4(exportMesh.matrixWorld);
-        exportMesh.rotation.set(0,0,0);
-        exportMesh.position.set(0,0,0);
-        exportMesh.scale.set(1,1,1);
-        
-        this._fixNormals(exportMesh);
-    
+        exportMesh.rotation.set(0, 0, 0);
+        exportMesh.position.set(0, 0, 0);
+        exportMesh.scale.set(1, 1, 1);
+
         const exporter = new STLExporter();
         const result = exporter.parse(exportMesh, { binary: true });
         const blob = new Blob([result], { type: 'application/octet-stream' });
-        
+
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `${type}.stl`;
         link.click();
-    }
-
-    _fixNormals(mesh) {
-        if (!mesh.geometry) return;
-        if (!mesh.geometry.index) mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry);
-        
-        const geom = mesh.geometry;
-        geom.computeBoundsTree();
-        
-        const pos = geom.attributes.position;
-        const index = geom.index;
-        const raycaster = new THREE.Raycaster();
-        raycaster.firstHitOnly = false;
-        
-        const count = index.count / 3;
-        const pA = new THREE.Vector3(), pB = new THREE.Vector3(), pC = new THREE.Vector3();
-        const center = new THREE.Vector3(), normal = new THREE.Vector3(), direction = new THREE.Vector3();
-        
-        for (let i = 0; i < count; i++) {
-            const a = index.getX(i * 3);
-            const b = index.getX(i * 3 + 1);
-            const c = index.getX(i * 3 + 2);
-            pA.fromBufferAttribute(pos, a); pB.fromBufferAttribute(pos, b); pC.fromBufferAttribute(pos, c);
-            
-            center.addVectors(pA, pB).add(pC).multiplyScalar(1/3);
-            const cb = new THREE.Vector3().subVectors(pC, pB);
-            const ab = new THREE.Vector3().subVectors(pA, pB);
-            normal.crossVectors(cb, ab).normalize();
-            
-            const start = center.clone().addScaledVector(normal, 0.001);
-            direction.copy(normal);
-            raycaster.set(start, direction);
-            
-            if (raycaster.intersectObject(mesh, true).length % 2 !== 0) {
-                index.setX(i * 3 + 1, c);
-                index.setX(i * 3 + 2, b);
-            }
-        }
-        index.needsUpdate = true;
-        geom.disposeBoundsTree();
-        geom.computeVertexNormals();
     }
 
     updateCuttersVisibility(visible) {
