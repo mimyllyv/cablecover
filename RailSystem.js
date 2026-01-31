@@ -133,31 +133,16 @@ export class RailSystem {
         }
 
         // Safety Check for NaNs
-        const checkNaN = (geo, name) => {
+        const checkNaN = (geo) => {
             if (!geo || !geo.attributes.position) return false;
             const array = geo.attributes.position.array;
             for (let i = 0; i < array.length; i++) {
-                if (isNaN(array[i])) {
-                    console.error(`NaN detected in ${name} geometry at index ${i}`);
-                    // Dump detailed info
-                    console.log("Params:", JSON.stringify(params));
-                    if (path) console.log("Path points:", path.getPoints());
-                    
-                    const shape = name === 'Rail' ? railShape : coverShape;
-                    const points = shape.getPoints();
-                    const nanPoints = points.filter(p => isNaN(p.x) || isNaN(p.y));
-                    if (nanPoints.length > 0) {
-                        console.error("Shape has NaN points:", nanPoints);
-                    } else {
-                        console.log("Shape points (First 5):", points.slice(0, 5));
-                    }
-                    return true;
-                }
+                if (isNaN(array[i])) return true;
             }
             return false;
         };
 
-        if (checkNaN(railGeometry, 'Rail') || checkNaN(coverGeometry, 'Cover')) {
+        if (checkNaN(railGeometry) || checkNaN(coverGeometry)) {
             console.error("Generated geometry contains NaN values. Aborting mesh update.");
             return;
         }
