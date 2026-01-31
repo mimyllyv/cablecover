@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { parseDXF, convertEntitiesToShape } from './dxf-to-shape.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -37,7 +38,8 @@ const axesHelper = new THREE.AxesHelper(10);
 scene.add(axesHelper);
 
 // State
-let currentMeshes = [];
+let railMesh = null;
+let coverMesh = null;
 let currentLength = 100;
 let railShape = null;
 let coverShape = null;
@@ -77,8 +79,8 @@ function updateShapes() {
     }
 
     // Remove old meshes
-    currentMeshes.forEach(mesh => scene.remove(mesh));
-    currentMeshes = [];
+    if (railMesh) scene.remove(railMesh);
+    if (coverMesh) scene.remove(coverMesh);
 
     const extrudeSettings = {
         steps: 1,
@@ -91,94 +93,72 @@ function updateShapes() {
     const coverMaterial = new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
 
     // --- Rail Construction ---
-    // 1. Create Base Rail Geometry
     const railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
     railGeometry.computeBoundingBox();
     const railMinY = railGeometry.boundingBox.min.y;
     const railHeightOffset = -railMinY;
     const zOffset = -currentLength / 2;
 
-    // Create a Brush for the rail
-    // We need to apply the transforms to the Brush so CSG happens in correct space
     const railBrush = new Brush(railGeometry, material);
     railBrush.position.set(-10, railHeightOffset, zOffset);
-    railBrush.rotation.z = 0; 
+    railBrush.rotation.z = 0;
     railBrush.updateMatrixWorld();
-
-    // 2. Create Hole Cylinders (if needed)
-    let finalRailMesh;
 
     if (holeCount > 0 && holeDiameter > 0) {
         let resultBrush = railBrush;
-
-        // Create a generic cylinder geometry for the holes
-        // Height should be enough to punch through the rail floor (approx 2.2mm). 
-        // Let's make it 20mm to be safe and center it vertically relative to the floor.
         const cylinderGeo = new THREE.CylinderGeometry(holeDiameter / 2, holeDiameter / 2, 20, 32);
-        
+
         for (let i = 0; i < holeCount; i++) {
-            // Distribute holes evenly along Z axis
-            // Start of rail is at zOffset. End is at zOffset + currentLength.
-            // Or simpler: The rail geometry itself goes from Z=0 to Z=length.
-            // Then we shifted it by zOffset.
-            // Center of rail in Z is 0.
-            // Range is [-currentLength/2, currentLength/2].
-            
-            let zPos;
-            if (holeCount === 1) {
-                zPos = 0;
-            } else {
-                // Distribute from -L/2 to L/2
-                // Margin? usually we want them spaced.
-                // Step = Length / (Count + 1) for even spacing including ends?
-                // Or Length / Count and offset by half segment?
-                
-                // Option A: Even spacing with margins
-                const step = currentLength / holeCount;
-                zPos = -currentLength / 2 + step * (i + 0.5);
-            }
+            const step = currentLength / holeCount;
+            const zPos = -currentLength / 2 + step * (i + 0.5);
 
             const holeBrush = new Brush(cylinderGeo, material);
-            // Position hole
-            // X: -10 (Same as rail center)
-            // Y: 0 (Grid level) -> Cylinder is centered at 0, so it goes from -10 to +10. 
-            // The rail floor is at ~2mm height. So this will cut through.
-            // Z: Calculated zPos
-            holeBrush.position.set(-10, 5, zPos); 
+            holeBrush.position.set(-10, 5, zPos);
             holeBrush.updateMatrixWorld();
-
-            // Subtract
             resultBrush = csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
         }
-        finalRailMesh = resultBrush;
+        railMesh = resultBrush;
     } else {
-        finalRailMesh = railMesh; // Just use the mesh if no holes (wait, railMesh variable logic below)
-        finalRailMesh = new THREE.Mesh(railGeometry, material);
-        finalRailMesh.position.set(-10, railHeightOffset, zOffset);
-        finalRailMesh.rotation.z = 0;
+        railMesh = new THREE.Mesh(railGeometry, material);
+        railMesh.position.set(-10, railHeightOffset, zOffset);
     }
-    
-    // If result is a Brush, we need to treat it as a Mesh to add to scene
-    // Brush extends Mesh, so it works directly.
-    
-    // Ensure shadow casting/receiving if we add lights later
-    finalRailMesh.castShadow = true;
-    finalRailMesh.receiveShadow = true;
 
-    scene.add(finalRailMesh);
-    currentMeshes.push(finalRailMesh);
+    railMesh.castShadow = true;
+    railMesh.receiveShadow = true;
+    scene.add(railMesh);
 
 
     // --- Cover Construction ---
     const coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
-    const coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
-    coverMesh.position.x = -10; // Match rail position
-    coverMesh.position.y = railHeightOffset; // Move up to match rail's vertical shift
-    coverMesh.position.z = zOffset; // Center Z on origin
-    // coverMesh.rotation.x = -Math.PI / 2;
-    
+    coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
+    coverMesh.position.set(-10, railHeightOffset, zOffset);
+
+    coverMesh.castShadow = true;
+    coverMesh.receiveShadow = true;
     scene.add(coverMesh);
-    currentMeshes.push(coverMesh);
+}
+
+// Export Function
+function exportSTL(mesh, name) {
+    if (!mesh) return;
+
+    // Clone the mesh so we don't affect the scene orientation
+    const exportMesh = mesh.clone();
+
+    // Rotate 90 degrees on red (X) axis for printing orientation
+    // This makes the profile lie on the XY plane (or XZ depending on slicer)
+    exportMesh.rotation.x += Math.PI / 2;
+    exportMesh.updateMatrixWorld();
+
+    const exporter = new STLExporter();
+    // Use binary for smaller files
+    const result = exporter.parse(exportMesh, { binary: true });
+    const blob = new Blob([result], { type: 'application/octet-stream' });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${name}.stl`;
+    link.click();
 }
 
 // Event Listeners
@@ -186,6 +166,8 @@ const btnAddStraight = document.getElementById('add-straight');
 const inputLength = document.getElementById('length-input');
 const inputHoleCount = document.getElementById('hole-count');
 const inputHoleDiameter = document.getElementById('hole-diameter');
+const btnExportRail = document.getElementById('export-rail');
+const btnExportCover = document.getElementById('export-cover');
 
 if (btnAddStraight) {
     btnAddStraight.addEventListener('click', () => {
@@ -198,7 +180,7 @@ if (inputLength) {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val > 0) {
             currentLength = val;
-            if (currentMeshes.length > 0) updateShapes();
+            if (railMesh) updateShapes();
         }
     });
 }
@@ -208,7 +190,7 @@ if (inputHoleCount) {
         const val = parseInt(e.target.value);
         if (!isNaN(val) && val >= 0) {
             holeCount = val;
-            if (currentMeshes.length > 0) updateShapes();
+            if (railMesh) updateShapes();
         }
     });
 }
@@ -218,8 +200,20 @@ if (inputHoleDiameter) {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val > 0) {
             holeDiameter = val;
-            if (currentMeshes.length > 0) updateShapes();
+            if (railMesh) updateShapes();
         }
+    });
+}
+
+if (btnExportRail) {
+    btnExportRail.addEventListener('click', () => {
+        exportSTL(railMesh, 'rail');
+    });
+}
+
+if (btnExportCover) {
+    btnExportCover.addEventListener('click', () => {
+        exportSTL(coverMesh, 'cover');
     });
 }
 
@@ -228,9 +222,9 @@ loadProfiles();
 
 // Animation Loop
 function animate() {
-	requestAnimationFrame(animate);
-	controls.update();
-	renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
 }
 animate();
 
