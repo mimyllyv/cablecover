@@ -1,42 +1,118 @@
 body {
-  margin: 0;
-  overflow: hidden;
-  font-family: sans-serif;
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    background-color: #111;
+    /* Dark background behind canvas */
 }
+
 canvas {
-  display: block;
+    display: block;
 }
-#ui-container {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  display: flex;
-  align-items: center;
-  gap: 10px;
+
+#left-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
+
+#right-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.panel {
+    background: rgba(10, 20, 40, 0.2);
+    /* Dark Blue Transparent */
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid rgba(100, 150, 255, 0.2);
+    backdrop-filter: blur(5px);
+}
+
+h3 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+    color: #e0e0e0;
+    /* Light Gray */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkbox-row {
+    justify-content: flex-start;
+    gap: 8px;
+    margin-top: 5px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+input[type="number"],
+select {
+    padding: 6px;
+    border: 1px solid #445566;
+    background: #1a2635;
+    color: #fff;
+    border-radius: 4px;
+    width: 70px;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    border-color: #00aaff;
+}
+
 button {
-  cursor: pointer;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #f0f0f0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+    cursor: pointer;
+    padding: 10px 12px;
+    border: 1px solid rgba(100, 150, 255, 0.3);
+    border-radius: 4px;
+    background: rgba(30, 50, 80, 0.8);
+    color: #e0e0e0;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
 }
+
 button:hover {
-  background: #e0e0e0;
+    background: rgba(50, 80, 130, 0.9);
+    border-color: #00aaff;
+    color: #fff;
 }
-input[type="number"] {
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 80px;
-}
+
 label {
-  font-size: 14px;
+    color: #b0b0b0;
+    /* Light Gray */
 }

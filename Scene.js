@@ -6,7 +6,7 @@ export function createScene() {
     scene.background = new THREE.Color(0x222222);
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(20, 20, 30);
+    camera.position.set(100, 100, 150);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -28,7 +28,7 @@ export function createScene() {
 
     // Grid
     const size = 300;
-    const divisions = 300;
+    const divisions = 30; // 300 / 30 = 10mm spacing
     const gridHelper = new THREE.GridHelper(size, divisions, 0x444444, 0x333333);
     scene.add(gridHelper);
 

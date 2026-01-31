@@ -205,6 +205,28 @@ export class RailSystem {
         this.meshes.cover.castShadow = true;
         this.meshes.cover.receiveShadow = true;
 
+        // --- Fix Angled Vertical Position ---
+        if (params.isAngledMode) {
+            // Compute bbox to find lowest Y point
+            this.meshes.rail.geometry.computeBoundingBox();
+            const bbox = this.meshes.rail.geometry.boundingBox;
+            
+            // The mesh is rotated, so we need to account for that. 
+            // Or simpler: apply the rotation to a temporary geometry copy to measure?
+            // Actually, since we set rotation.z, the local bbox is still unrotated.
+            // Local Min Y becomes Global Min X (rotated 90).
+            // Local Min X becomes Global Min Y.
+            // So we need to look at Local X.
+            
+            // Let's just updateMatrixWorld and use setFromObject for global box
+            this.meshes.rail.updateMatrixWorld();
+            const globalBox = new THREE.Box3().setFromObject(this.meshes.rail);
+            const yOffset = -globalBox.min.y;
+            
+            this.meshes.rail.position.y += yOffset;
+            this.meshes.cover.position.y += yOffset;
+        }
+
         this.scene.add(this.meshes.rail);
         this.scene.add(this.meshes.cover);
     }
