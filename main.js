@@ -47,13 +47,21 @@ scene.add(axesHelper);
 // State
 let railMesh = null;
 let coverMesh = null;
-let currentMeshes = []; // Array to track visualization meshes (like cylinders)
+let currentMeshes = []; 
 let currentLength = 100;
 let railShape = null;
 let coverShape = null;
 let holeCount = 2;
 let holeDiameter = 4;
 let showCutters = true;
+
+// Angled State
+let isAngledMode = false;
+let angleVal = 90;
+let len1Val = 100;
+let len2Val = 100;
+let radiusVal = 20;
+let turnAxis = 'horizontal';
 
 // CSG Evaluator
 const csgEvaluator = new Evaluator();
@@ -80,6 +88,52 @@ async function loadProfiles() {
     }
 }
 
+function createRoundedPath(l1, l2, angleDeg, r, axis) {
+    const theta = (angleDeg * Math.PI) / 180;
+    const tanDist = r * Math.tan(theta / 2);
+    
+    if (l1 < tanDist || l2 < tanDist) {
+        console.warn("Lengths too short for radius/angle");
+    }
+
+    const path = new THREE.CurvePath();
+
+    // Start at (0,0,0) facing +Z
+    const start = new THREE.Vector3(0,0,0);
+    const seg1Len = l1 - tanDist;
+    const p1 = new THREE.Vector3(0, 0, seg1Len); // Always move along Z first
+    
+    // Line 1
+    const line1 = new THREE.LineCurve3(start, p1);
+    path.add(line1);
+
+    // Corner Calculation
+    const pCorner = new THREE.Vector3(0, 0, l1);
+    
+    let dir2;
+    if (axis === 'vertical') {
+        dir2 = new THREE.Vector3(0, Math.sin(theta), Math.cos(theta));
+    } else {
+        dir2 = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+    }
+    
+    const p2 = pCorner.clone().add(dir2.clone().multiplyScalar(tanDist)); 
+    
+    // Curve
+    const curve = new THREE.QuadraticBezierCurve3(p1, pCorner, p2);
+    path.add(curve);
+
+    // Line 2
+    const seg2Len = l2 - tanDist;
+    const end = p2.clone().add(dir2.clone().multiplyScalar(seg2Len));
+    
+    const line2 = new THREE.LineCurve3(p2, end);
+    path.add(line2);
+
+    return path;
+}
+
+
 // Function to update shapes
 function updateShapes() {
     if (!railShape || !coverShape) {
@@ -99,71 +153,150 @@ function updateShapes() {
     });
     currentMeshes = [];
 
-    const extrudeSettings = {
-        steps: 1,
-        depth: currentLength,
-        bevelEnabled: false,
-    };
-
     // Material
     const material = new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
     const coverMaterial = new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
 
-    // --- Rail Construction ---
-    const railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
-    railGeometry.computeBoundingBox();
-    const railMinY = railGeometry.boundingBox.min.y;
-    const railHeightOffset = -railMinY;
-    const zOffset = -currentLength / 2;
+    let railGeometry, coverGeometry;
 
-    const railBrush = new Brush(railGeometry, material);
-    railBrush.position.set(-10, railHeightOffset, zOffset);
-    railBrush.rotation.z = 0;
-    railBrush.updateMatrixWorld();
-
-    if (holeCount > 0 && holeDiameter > 0) {
-        let resultBrush = railBrush;
-        // Oversize the cylinder to ensure it punches through completely (height 12.5)
-        const cylinderGeo = new THREE.CylinderGeometry(holeDiameter / 2, holeDiameter / 2, 12.5, 32);
-        const holeMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xff0000, 
-            transparent: true, 
-            opacity: 0.5 
-        });
+    if (isAngledMode) {
+        // Angled Generation
+        const path = createRoundedPath(len1Val, len2Val, angleVal, radiusVal, turnAxis);
         
-        for (let i = 0; i < holeCount; i++) {
-            const step = currentLength / holeCount;
-            const zPos = -currentLength / 2 + step * (i + 0.5);
+        const extrudeSettings = {
+            steps: 200, 
+            extrudePath: path,
+            bevelEnabled: false
+        };
+        
+        railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
+        coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
+        
+        // --- Angled Holes Logic ---
+        if (holeCount > 0 && holeDiameter > 0) {
+            let railBrush = new Brush(railGeometry, material);
+            railBrush.updateMatrixWorld();
+            let resultBrush = railBrush;
 
-            const holeBrush = new Brush(cylinderGeo, material);
-            // Center at Y=0 so it goes from -25 to +25, easily clearing the rail floor
-            holeBrush.position.set(-10, 0, zPos); 
-            holeBrush.updateMatrixWorld();
-            resultBrush = csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
+            const cylinderGeo = new THREE.CylinderGeometry(holeDiameter / 2, holeDiameter / 2, 12.5, 32);
+             const holeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xff0000, 
+                transparent: true, 
+                opacity: 0.5 
+            });
 
-            // Create a visualization mesh
-            const visualHole = new THREE.Mesh(cylinderGeo, holeMaterial);
-            visualHole.position.copy(holeBrush.position);
-            visualHole.visible = showCutters;
-            scene.add(visualHole);
-            currentMeshes.push(visualHole);
+            for (let i = 0; i < holeCount; i++) {
+                const t = (i + 0.5) / holeCount;
+                const point = path.getPointAt(t);
+                
+                let holeQuat = new THREE.Quaternion();
+                
+                if (turnAxis === 'vertical') {
+                    // "oriented to green axis. No additional rotation is needed."
+                    // Final rotation is +90 Z.
+                    // To get Y (0,1,0) in world, we need X (1,0,0) in CSG frame.
+                    // Cylinder is Y-up by default. Rotate Y to X -> -90 deg around Z.
+                    holeQuat.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI / 2);
+                } else {
+                    // Horizontal Turn: Perpendicular to floor.
+                    // The floor stays at the "Normal" or "Up" frame.
+                    // As before, we calculated upVec and applied -90 Z.
+                    let tangent = path.getTangentAt(t);
+                    let upVec = new THREE.Vector3(0, 1, 0); // Horizontal turn Up is Y
+                    upVec.applyAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+                    holeQuat.setFromUnitVectors(new THREE.Vector3(0,1,0), upVec);
+                }
+
+                const holeBrush = new Brush(cylinderGeo, material);
+                holeBrush.position.copy(point);
+                holeBrush.quaternion.copy(holeQuat);
+                
+                holeBrush.updateMatrixWorld();
+                resultBrush = csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
+                
+                // Visual
+                const visualHole = new THREE.Mesh(cylinderGeo, holeMaterial);
+                visualHole.position.copy(holeBrush.position);
+                visualHole.quaternion.copy(holeBrush.quaternion);
+                visualHole.visible = showCutters;
+                
+                // Note: The visual hole will also be rotated by the final railMesh.rotation.z
+                // We need to either add it to the railMesh group or keep it in the scene but it needs to be child of something that rotates.
+                // Better: Add to a group that gets rotated.
+                currentMeshes.push(visualHole);
+            }
+            
+            railMesh = resultBrush;
+        } else {
+             railMesh = new THREE.Mesh(railGeometry, material);
         }
-        railMesh = resultBrush;
+
+        railMesh.rotation.z = Math.PI / 2; // Correct profile orientation
+        
+        // Add visual holes as children of railMesh so they rotate together
+        currentMeshes.forEach(vh => railMesh.add(vh));
+
+        coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
+        coverMesh.rotation.z = Math.PI / 2; // Correct profile orientation
+        
     } else {
-        railMesh = new THREE.Mesh(railGeometry, material);
-        railMesh.position.set(-10, railHeightOffset, zOffset);
+        // Straight Generation
+        const extrudeSettings = {
+            steps: 1,
+            depth: currentLength,
+            bevelEnabled: false,
+        };
+
+        railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
+        railGeometry.computeBoundingBox();
+        const railMinY = railGeometry.boundingBox.min.y;
+        const railHeightOffset = -railMinY;
+        const zOffset = -currentLength / 2;
+
+        const railBrush = new Brush(railGeometry, material);
+        railBrush.position.set(-10, railHeightOffset, zOffset);
+        railBrush.rotation.z = 0;
+        railBrush.updateMatrixWorld();
+
+        if (holeCount > 0 && holeDiameter > 0) {
+            let resultBrush = railBrush;
+            const cylinderGeo = new THREE.CylinderGeometry(holeDiameter / 2, holeDiameter / 2, 12.5, 32);
+            const holeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xff0000, 
+                transparent: true, 
+                opacity: 0.5 
+            });
+            
+            for (let i = 0; i < holeCount; i++) {
+                const step = currentLength / holeCount;
+                const zPos = -currentLength / 2 + step * (i + 0.5);
+
+                const holeBrush = new Brush(cylinderGeo, material);
+                holeBrush.position.set(-10, 0, zPos); 
+                holeBrush.updateMatrixWorld();
+                resultBrush = csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
+
+                const visualHole = new THREE.Mesh(cylinderGeo, holeMaterial);
+                visualHole.position.copy(holeBrush.position);
+                visualHole.visible = showCutters;
+                scene.add(visualHole);
+                currentMeshes.push(visualHole);
+            }
+            railMesh = resultBrush;
+        } else {
+            railMesh = new THREE.Mesh(railGeometry, material);
+            railMesh.position.set(-10, railHeightOffset, zOffset);
+        }
+        
+        coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
+        coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
+        coverMesh.position.set(-10, railHeightOffset, zOffset);
     }
 
     railMesh.castShadow = true;
     railMesh.receiveShadow = true;
     scene.add(railMesh);
-
-
-    // --- Cover Construction ---
-    const coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
-    coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
-    coverMesh.position.set(-10, railHeightOffset, zOffset);
-
+    
     coverMesh.castShadow = true;
     coverMesh.receiveShadow = true;
     scene.add(coverMesh);
@@ -173,26 +306,18 @@ function updateShapes() {
 function fixNormalsWithRaycasting(mesh) {
     if (!mesh.geometry) return;
     
-    // Ensure indexed geometry for easier swapping
     if (!mesh.geometry.index) {
         mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry);
     }
     
     const geom = mesh.geometry;
-    geom.computeBoundsTree(); // BVH for speed
+    geom.computeBoundsTree(); 
     
     const pos = geom.attributes.position;
     const index = geom.index;
     const raycaster = new THREE.Raycaster();
-    // Raycaster usually needs to point to specific layers or objects, here we test against the mesh itself.
-    // However, basic Raycaster hits 'front' faces by default. We need 'double' side intersection logic?
-    // Actually, checking intersection count is robust.
     
-    // We need to raycast against the mesh itself
     raycaster.firstHitOnly = false;
-    
-    // Create a temp mesh for raycasting that matches the export mesh
-    // (The input mesh is already world-oriented)
     
     const count = index.count / 3;
     let flippedCount = 0;
@@ -204,7 +329,6 @@ function fixNormalsWithRaycasting(mesh) {
     const normal = new THREE.Vector3();
     const direction = new THREE.Vector3();
     
-    // Iterate faces
     for (let i = 0; i < count; i++) {
         const a = index.getX(i * 3);
         const b = index.getX(i * 3 + 1);
@@ -214,31 +338,20 @@ function fixNormalsWithRaycasting(mesh) {
         pB.fromBufferAttribute(pos, b);
         pC.fromBufferAttribute(pos, c);
         
-        // Calculate Geometric Center
         center.addVectors(pA, pB).add(pC).multiplyScalar(1/3);
         
-        // Calculate Geometric Normal (Cross product)
         const cb = new THREE.Vector3().subVectors(pC, pB);
         const ab = new THREE.Vector3().subVectors(pA, pB);
         normal.crossVectors(cb, ab).normalize();
         
-        // Setup Ray: Start slightly outside face along normal
         const start = center.clone().addScaledVector(normal, 0.001);
-        direction.copy(normal); // Point OUT
+        direction.copy(normal);
         
         raycaster.set(start, direction);
         
-        // Raycast against the mesh itself
-        // Note: acceleratedRaycast requires the mesh to be passed or attached.
         const intersects = raycaster.intersectObject(mesh, true);
         
-        // Count hits. 
-        // Logic: If we are "Outside", shooting "Out" should hit 0 (or even number if we pass through other parts).
-        // If we are "Inside" (inverted normal), shooting "Out" (which is actually In) will hit the other side of the model (Odd number).
-        
         if (intersects.length % 2 !== 0) {
-            // Odd hits -> We were pointing IN -> FLIP
-            // Swap B and C
             index.setX(i * 3 + 1, c);
             index.setX(i * 3 + 2, b);
             flippedCount++;
@@ -257,13 +370,10 @@ function fixNormalsWithRaycasting(mesh) {
 function exportSTL(mesh, name) {
     if (!mesh) return;
 
-    // Clone the mesh so we don't affect the scene orientation
     const exportMesh = mesh.clone();
     
-    // Ensure we have geometry
     if (!exportMesh.geometry) return;
 
-    // Apply rotation before fixing normals, so rays match visual orientation
     exportMesh.rotation.x += Math.PI / 2;
     exportMesh.updateMatrixWorld();
     exportMesh.geometry.applyMatrix4(exportMesh.matrixWorld);
@@ -271,11 +381,9 @@ function exportSTL(mesh, name) {
     exportMesh.position.set(0,0,0);
     exportMesh.scale.set(1,1,1);
     
-    // Fix Normals using Raycaster
     fixNormalsWithRaycasting(exportMesh);
 
     const exporter = new STLExporter();
-    // Use binary for smaller files
     const result = exporter.parse(exportMesh, { binary: true });
     const blob = new Blob([result], { type: 'application/octet-stream' });
     
@@ -287,25 +395,43 @@ function exportSTL(mesh, name) {
 
 // Event Listeners
 const btnAddStraight = document.getElementById('add-straight');
+const btnCreateAngled = document.getElementById('create-angled');
+
 const inputLength = document.getElementById('length-input');
 const inputHoleCount = document.getElementById('hole-count');
 const inputHoleDiameter = document.getElementById('hole-diameter');
+
+const inputAngle = document.getElementById('angle-val');
+const inputLen1 = document.getElementById('len1-val');
+const inputLen2 = document.getElementById('len2-val');
+const inputRadius = document.getElementById('radius-val');
+const inputTurnAxis = document.getElementById('turn-axis');
+
 const btnExportRail = document.getElementById('export-rail');
 const btnExportCover = document.getElementById('export-cover');
 const inputShowCutters = document.getElementById('show-holes');
 
 if (btnAddStraight) {
     btnAddStraight.addEventListener('click', () => {
+        isAngledMode = false;
         updateShapes();
     });
 }
 
+if (btnCreateAngled) {
+    btnCreateAngled.addEventListener('click', () => {
+        isAngledMode = true;
+        updateShapes();
+    });
+}
+
+// Straight Inputs
 if (inputLength) {
     inputLength.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val > 0) {
             currentLength = val;
-            if (railMesh) updateShapes();
+            if (railMesh ) updateShapes();
         }
     });
 }
@@ -315,7 +441,7 @@ if (inputHoleCount) {
         const val = parseInt(e.target.value);
         if (!isNaN(val) && val >= 0) {
             holeCount = val;
-            if (railMesh) updateShapes();
+            if (railMesh ) updateShapes();
         }
     });
 }
@@ -325,10 +451,56 @@ if (inputHoleDiameter) {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val > 0) {
             holeDiameter = val;
-            if (railMesh) updateShapes();
+            if (railMesh ) updateShapes();
         }
     });
 }
+
+// Angled Inputs
+if (inputAngle) {
+    inputAngle.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 0) {
+            angleVal = val;
+            if (railMesh && isAngledMode) updateShapes();
+        }
+    });
+}
+if (inputLen1) {
+    inputLen1.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val > 0) {
+            len1Val = val;
+            if (railMesh && isAngledMode) updateShapes();
+        }
+    });
+}
+if (inputLen2) {
+    inputLen2.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val > 0) {
+            len2Val = val;
+            if (railMesh && isAngledMode) updateShapes();
+        }
+    });
+}
+if (inputRadius) {
+    inputRadius.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val > 0) {
+            radiusVal = val;
+            if (railMesh && isAngledMode) updateShapes();
+        }
+    });
+}
+
+if (inputTurnAxis) {
+    inputTurnAxis.addEventListener('change', (e) => {
+        turnAxis = e.target.value;
+        if (railMesh && isAngledMode) updateShapes();
+    });
+}
+
 
 if (inputShowCutters) {
     inputShowCutters.addEventListener('change', (e) => {
