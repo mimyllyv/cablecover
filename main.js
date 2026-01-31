@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { parseDXF, convertEntitiesToShape } from './dxf-to-shape.js';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -40,6 +41,11 @@ let currentMeshes = [];
 let currentLength = 100;
 let railShape = null;
 let coverShape = null;
+let holeCount = 2;
+let holeDiameter = 4;
+
+// CSG Evaluator
+const csgEvaluator = new Evaluator();
 
 // Function to load profiles
 async function loadProfiles() {
@@ -84,26 +90,91 @@ function updateShapes() {
     const material = new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
     const coverMaterial = new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
 
-    // Rail
+    // --- Rail Construction ---
+    // 1. Create Base Rail Geometry
     const railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
     railGeometry.computeBoundingBox();
     const railMinY = railGeometry.boundingBox.min.y;
-    const railMaxY = railGeometry.boundingBox.max.y;
     const railHeightOffset = -railMinY;
+    const zOffset = -currentLength / 2;
 
-    const railMesh = new THREE.Mesh(railGeometry, material);
-    railMesh.position.x = -10; 
-    railMesh.position.y = railHeightOffset; // Move up to ground
-    railMesh.rotation.z = 0; 
+    // Create a Brush for the rail
+    // We need to apply the transforms to the Brush so CSG happens in correct space
+    const railBrush = new Brush(railGeometry, material);
+    railBrush.position.set(-10, railHeightOffset, zOffset);
+    railBrush.rotation.z = 0; 
+    railBrush.updateMatrixWorld();
+
+    // 2. Create Hole Cylinders (if needed)
+    let finalRailMesh;
+
+    if (holeCount > 0 && holeDiameter > 0) {
+        let resultBrush = railBrush;
+
+        // Create a generic cylinder geometry for the holes
+        // Height should be enough to punch through the rail floor (approx 2.2mm). 
+        // Let's make it 20mm to be safe and center it vertically relative to the floor.
+        const cylinderGeo = new THREE.CylinderGeometry(holeDiameter / 2, holeDiameter / 2, 20, 32);
+        
+        for (let i = 0; i < holeCount; i++) {
+            // Distribute holes evenly along Z axis
+            // Start of rail is at zOffset. End is at zOffset + currentLength.
+            // Or simpler: The rail geometry itself goes from Z=0 to Z=length.
+            // Then we shifted it by zOffset.
+            // Center of rail in Z is 0.
+            // Range is [-currentLength/2, currentLength/2].
+            
+            let zPos;
+            if (holeCount === 1) {
+                zPos = 0;
+            } else {
+                // Distribute from -L/2 to L/2
+                // Margin? usually we want them spaced.
+                // Step = Length / (Count + 1) for even spacing including ends?
+                // Or Length / Count and offset by half segment?
+                
+                // Option A: Even spacing with margins
+                const step = currentLength / holeCount;
+                zPos = -currentLength / 2 + step * (i + 0.5);
+            }
+
+            const holeBrush = new Brush(cylinderGeo, material);
+            // Position hole
+            // X: -10 (Same as rail center)
+            // Y: 0 (Grid level) -> Cylinder is centered at 0, so it goes from -10 to +10. 
+            // The rail floor is at ~2mm height. So this will cut through.
+            // Z: Calculated zPos
+            holeBrush.position.set(-10, 5, zPos); 
+            holeBrush.updateMatrixWorld();
+
+            // Subtract
+            resultBrush = csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
+        }
+        finalRailMesh = resultBrush;
+    } else {
+        finalRailMesh = railMesh; // Just use the mesh if no holes (wait, railMesh variable logic below)
+        finalRailMesh = new THREE.Mesh(railGeometry, material);
+        finalRailMesh.position.set(-10, railHeightOffset, zOffset);
+        finalRailMesh.rotation.z = 0;
+    }
     
-    scene.add(railMesh);
-    currentMeshes.push(railMesh);
+    // If result is a Brush, we need to treat it as a Mesh to add to scene
+    // Brush extends Mesh, so it works directly.
+    
+    // Ensure shadow casting/receiving if we add lights later
+    finalRailMesh.castShadow = true;
+    finalRailMesh.receiveShadow = true;
 
-    // Cover
+    scene.add(finalRailMesh);
+    currentMeshes.push(finalRailMesh);
+
+
+    // --- Cover Construction ---
     const coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
     const coverMesh = new THREE.Mesh(coverGeometry, coverMaterial);
     coverMesh.position.x = -10; // Match rail position
     coverMesh.position.y = railHeightOffset; // Move up to match rail's vertical shift
+    coverMesh.position.z = zOffset; // Center Z on origin
     // coverMesh.rotation.x = -Math.PI / 2;
     
     scene.add(coverMesh);
@@ -113,6 +184,8 @@ function updateShapes() {
 // Event Listeners
 const btnAddStraight = document.getElementById('add-straight');
 const inputLength = document.getElementById('length-input');
+const inputHoleCount = document.getElementById('hole-count');
+const inputHoleDiameter = document.getElementById('hole-diameter');
 
 if (btnAddStraight) {
     btnAddStraight.addEventListener('click', () => {
@@ -125,9 +198,27 @@ if (inputLength) {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val > 0) {
             currentLength = val;
-            if (currentMeshes.length > 0) {
-                updateShapes();
-            }
+            if (currentMeshes.length > 0) updateShapes();
+        }
+    });
+}
+
+if (inputHoleCount) {
+    inputHoleCount.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        if (!isNaN(val) && val >= 0) {
+            holeCount = val;
+            if (currentMeshes.length > 0) updateShapes();
+        }
+    });
+}
+
+if (inputHoleDiameter) {
+    inputHoleDiameter.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val > 0) {
+            holeDiameter = val;
+            if (currentMeshes.length > 0) updateShapes();
         }
     });
 }
