@@ -11,42 +11,46 @@
     <div id="left-panel">
         
         <div class="panel" id="ui-container">
-            <h3>Straight Section</h3>
-            <button id="add-straight" title="Create a straight rail section">
-                Straight rail
-            </button>
-            <div class="control-row">
-                <label for="length-input">Length (mm):</label>
-                <input type="number" id="length-input" value="100" step="0.1" min="1">
+            <div class="panel-header"><h3>Straight Section</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <button id="add-straight" title="Create a straight rail section">
+                    Straight
+                </button>
+                <div class="control-row">
+                    <label for="length-input">Length (mm):</label>
+                    <input type="number" id="length-input" value="100" step="0.1" min="1">
+                </div>
             </div>
         </div>
 
         <div class="panel" id="angled-container">
-            <h3>Angled Section</h3>
-            <div class="button-group">
-                <button id="create-horizontal" title="Create a flat left/right turn">
-                    Horizontal Angle
-                </button>
-                <button id="create-vertical" title="Create a vertical up/down turn">
-                    Vertical Angle
-                </button>
-            </div>
-            
-            <div class="control-row">
-                <label for="angle-val">Angle (°):</label>
-                <input type="number" id="angle-val" value="90" min="-135" max="135">
-            </div>
-            <div class="control-row">
-                <label for="len1-val">Length 1 (mm):</label>
-                <input type="number" id="len1-val" value="100" min="1">
-            </div>
-            <div class="control-row">
-                <label for="len2-val">Length 2 (mm):</label>
-                <input type="number" id="len2-val" value="100" min="1">
-            </div>
-            <div class="control-row">
-                <label for="radius-val">Roundness (mm):</label>
-                <input type="number" id="radius-val" value="20" min="1">
+            <div class="panel-header"><h3>Angled Section</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <div class="button-group">
+                    <button id="create-horizontal" title="Create a flat left/right turn">
+                        Horizontal
+                    </button>
+                    <button id="create-vertical" title="Create a vertical up/down turn">
+                        Vertical
+                    </button>
+                </div>
+                
+                <div class="control-row">
+                    <label for="angle-val">Angle (°):</label>
+                    <input type="number" id="angle-val" value="90" min="-135" max="135">
+                </div>
+                <div class="control-row">
+                    <label for="len1-val">Length 1 (mm):</label>
+                    <input type="number" id="len1-val" value="100" min="1">
+                </div>
+                <div class="control-row">
+                    <label for="len2-val">Length 2 (mm):</label>
+                    <input type="number" id="len2-val" value="100" min="1">
+                </div>
+                <div class="control-row">
+                    <label for="radius-val">Roundness (mm):</label>
+                    <input type="number" id="radius-val" value="20" min="1">
+                </div>
             </div>
         </div>
 
@@ -55,59 +59,68 @@
     <!-- Right Panel: Holes & Export -->
     <div id="right-panel">
 
-        <div class="panel" id="profile-container">
-            <h3>Profile Properties</h3>
-            <div class="control-row">
-                <label for="inner-width">Width (mm):</label>
-                <input type="number" id="inner-width" value="8.0" min="1" step="0.1">
-            </div>
-            <div class="control-row">
-                <label for="inner-height">Height (mm):</label>
-                <input type="number" id="inner-height" value="9.0" min="1" step="0.1">
-            </div>
-        </div>
-
-        <div class="panel" id="view-container">
-            <h3>View</h3>
-            <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
-                <input type="checkbox" id="show-rail" checked>
-                <label for="show-rail">Show Rail</label>
-            </div>
-            <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
-                <input type="checkbox" id="show-cover" checked>
-                <label for="show-cover">Show Cover</label>
-            </div>
-        </div>
-
         <div class="panel" id="preview-container">
-            <h3>Profile Preview</h3>
-            <div class="button-group" style="flex-direction: row; justify-content: space-around; margin-bottom: 5px;">
-                <button id="preview-rail-btn" style="flex: 1;">Rail</button>
-                <button id="preview-cover-btn" style="flex: 1;">Cover</button>
+            <div class="panel-header"><h3>Profile Preview</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <div class="button-group" style="flex-direction: row; justify-content: space-around; margin-bottom: 5px;">
+                    <button id="preview-rail-btn" style="flex: 1;">Rail</button>
+                    <button id="preview-cover-btn" style="flex: 1;">Cover</button>
+                </div>
+                <canvas id="profile-canvas" width="200" height="150" style="background: #222; border-radius: 4px;"></canvas>
             </div>
-            <canvas id="profile-canvas" width="200" height="150" style="background: #222; border-radius: 4px;"></canvas>
+        </div>
+
+        <div class="panel collapsed" id="profile-container">
+            <div class="panel-header"><h3>Profile Properties</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <div class="control-row">
+                    <label for="inner-width">Width (mm):</label>
+                    <input type="number" id="inner-width" value="8.0" min="1" step="0.1">
+                </div>
+                <div class="control-row">
+                    <label for="inner-height">Height (mm):</label>
+                    <input type="number" id="inner-height" value="9.0" min="1" step="0.1">
+                </div>
+            </div>
         </div>
 
         <div class="panel" id="holes-container">
-            <h3>Holes</h3>
-            <div class="control-row">
-                <label for="hole-count">Count:</label>
-                <input type="number" id="hole-count" value="2" min="0" step="1">
+            <div class="panel-header"><h3>Holes</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <div class="control-row">
+                    <label for="hole-count">Count:</label>
+                    <input type="number" id="hole-count" value="2" min="0" step="1">
+                </div>
+                            <div class="control-row">
+                                <label for="hole-diameter">Diameter (mm):</label>
+                                <input type="number" id="hole-diameter" value="3.0" min="0.1" step="0.1">
+                            </div>                <div class="control-row checkbox-row">
+                    <input type="checkbox" id="show-holes" checked>
+                    <label for="show-holes">Show Cutters</label>
+                </div>
             </div>
-            <div class="control-row">
-                <label for="hole-diameter">Diameter (mm):</label>
-                <input type="number" id="hole-diameter" value="4" min="0.1" step="0.1">
-            </div>
-            <div class="control-row checkbox-row">
-                <input type="checkbox" id="show-holes" checked>
-                <label for="show-holes">Show Cutters</label>
+        </div>
+
+        <div class="panel collapsed" id="view-container">
+            <div class="panel-header"><h3>View</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+                    <input type="checkbox" id="show-rail" checked>
+                    <label for="show-rail">Show Rail</label>
+                </div>
+                <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+                    <input type="checkbox" id="show-cover" checked>
+                    <label for="show-cover">Show Cover</label>
+                </div>
             </div>
         </div>
 
         <div class="panel" id="export-container">
-            <h3>Export</h3>
-            <button id="export-rail">Export Rail (.stl)</button>
-            <button id="export-cover">Export Cover (.stl)</button>
+            <div class="panel-header"><h3>Export</h3><span class="toggle-icon">▼</span></div>
+            <div class="panel-content">
+                <button id="export-rail">Rail (.stl)</button>
+                <button id="export-cover">Cover (.stl)</button>
+            </div>
         </div>
 
     </div>

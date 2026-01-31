@@ -9,7 +9,7 @@ export class UIManager {
             isAngledMode: false,
             length: 100,
             holeCount: 2,
-            holeDiameter: 4,
+            holeDiameter: 3.0,
             angle: 90,
             len1: 100,
             len2: 100,
@@ -26,7 +26,6 @@ export class UIManager {
     }
 
     update(immediate = false) {
-        // Always update 2D preview immediately as it's fast
         this.preview.update(this.state);
 
         if (this.updateTimeout) clearTimeout(this.updateTimeout);
@@ -51,6 +50,14 @@ export class UIManager {
     }
 
     initListeners() {
+        // Toggle Panels
+        document.querySelectorAll('.panel-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const panel = header.parentElement;
+                panel.classList.toggle('collapsed');
+            });
+        });
+
         document.getElementById('add-straight')?.addEventListener('click', () => {
             this.state.isAngledMode = false;
             this.update();
@@ -108,7 +115,6 @@ export class UIManager {
         document.getElementById('export-rail')?.addEventListener('click', () => this.railSystem.exportSTL('rail'));
         document.getElementById('export-cover')?.addEventListener('click', () => this.railSystem.exportSTL('cover'));
 
-        // Preview Buttons
         document.getElementById('preview-rail-btn')?.addEventListener('click', () => {
             this.preview.setMode('rail');
             this.preview.update(this.state);
