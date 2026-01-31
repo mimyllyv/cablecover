@@ -112,8 +112,8 @@ export class UIManager {
             this.updateVisibility();
         });
 
-        document.getElementById('export-rail')?.addEventListener('click', () => this.railSystem.exportSTL('rail'));
-        document.getElementById('export-cover')?.addEventListener('click', () => this.railSystem.exportSTL('cover'));
+        document.getElementById('export-rail')?.addEventListener('click', () => this.railSystem.exportSTL('rail', this.state));
+        document.getElementById('export-cover')?.addEventListener('click', () => this.railSystem.exportSTL('cover', this.state));
 
         document.getElementById('preview-rail-btn')?.addEventListener('click', () => {
             this.preview.setMode('rail');
