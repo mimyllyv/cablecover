@@ -381,6 +381,9 @@ function exportSTL(mesh, name) {
 
     const exportMesh = mesh.clone();
     
+    // Remove any visualization children (like hole cutters)
+    exportMesh.clear();
+    
     if (!exportMesh.geometry) return;
 
     exportMesh.rotation.x += Math.PI / 2;
