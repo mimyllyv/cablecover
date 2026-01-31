@@ -8,7 +8,7 @@ async function init() {
 
     // 2. Setup Rail System
     const railSystem = new RailSystem(scene);
-    await railSystem.loadProfiles();
+    // await railSystem.loadProfiles(); // Removed: Using parametric shapes now
 
     // 3. Setup UI
     const ui = new UIManager(railSystem);

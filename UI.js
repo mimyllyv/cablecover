@@ -1,6 +1,9 @@
+import { ProfilePreview } from './ProfilePreview.js';
+
 export class UIManager {
     constructor(railSystem) {
         this.railSystem = railSystem;
+        this.preview = new ProfilePreview('profile-canvas');
         this.updateTimeout = null;
         this.state = {
             isAngledMode: false,
@@ -12,37 +15,47 @@ export class UIManager {
             len2: 100,
             radius: 20,
             turnAxis: 'horizontal',
-            showCutters: true
+            showCutters: true,
+            showRail: true,
+            showCover: true,
+            innerWidth: 8.0,
+            innerHeight: 9.0
         };
 
         this.initListeners();
     }
 
     update(immediate = false) {
+        // Always update 2D preview immediately as it's fast
+        this.preview.update(this.state);
+
         if (this.updateTimeout) clearTimeout(this.updateTimeout);
 
         if (immediate) {
              this.railSystem.generate(this.state, false); 
-             this.railSystem.updateCuttersVisibility(this.state.showCutters);
+             this.updateVisibility();
         } else {
             this.railSystem.generate(this.state, true);
-            this.railSystem.updateCuttersVisibility(this.state.showCutters);
+            this.updateVisibility();
 
             this.updateTimeout = setTimeout(() => {
                 this.railSystem.generate(this.state, false);
-                this.railSystem.updateCuttersVisibility(this.state.showCutters);
+                this.updateVisibility();
             }, 1000);
         }
     }
 
+    updateVisibility() {
+        this.railSystem.updateCuttersVisibility(this.state.showCutters);
+        this.railSystem.updateComponentVisibility(this.state.showRail, this.state.showCover);
+    }
+
     initListeners() {
-        // Mode Buttons
         document.getElementById('add-straight')?.addEventListener('click', () => {
             this.state.isAngledMode = false;
             this.update();
         });
         
-        // Angled Buttons
         document.getElementById('create-horizontal')?.addEventListener('click', () => {
             this.state.isAngledMode = true;
             this.state.turnAxis = 'horizontal';
@@ -55,7 +68,6 @@ export class UIManager {
             this.update();
         });
 
-        // Inputs
         const bindInput = (id, key, parser = parseFloat) => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', (e) => {
@@ -74,14 +86,36 @@ export class UIManager {
         bindInput('len1-val', 'len1');
         bindInput('len2-val', 'len2');
         bindInput('radius-val', 'radius');
+        
+        bindInput('inner-width', 'innerWidth');
+        bindInput('inner-height', 'innerHeight');
 
         document.getElementById('show-holes')?.addEventListener('change', (e) => {
             this.state.showCutters = e.target.checked;
-            this.railSystem.updateCuttersVisibility(this.state.showCutters);
+            this.updateVisibility();
         });
 
-        // Exports
+        document.getElementById('show-rail')?.addEventListener('change', (e) => {
+            this.state.showRail = e.target.checked;
+            this.updateVisibility();
+        });
+
+        document.getElementById('show-cover')?.addEventListener('change', (e) => {
+            this.state.showCover = e.target.checked;
+            this.updateVisibility();
+        });
+
         document.getElementById('export-rail')?.addEventListener('click', () => this.railSystem.exportSTL('rail'));
         document.getElementById('export-cover')?.addEventListener('click', () => this.railSystem.exportSTL('cover'));
+
+        // Preview Buttons
+        document.getElementById('preview-rail-btn')?.addEventListener('click', () => {
+            this.preview.setMode('rail');
+            this.preview.update(this.state);
+        });
+        document.getElementById('preview-cover-btn')?.addEventListener('click', () => {
+            this.preview.setMode('cover');
+            this.preview.update(this.state);
+        });
     }
 }

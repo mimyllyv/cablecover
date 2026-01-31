@@ -34,7 +34,7 @@
             
             <div class="control-row">
                 <label for="angle-val">Angle (°):</label>
-                <input type="number" id="angle-val" value="90" min="0" max="270">
+                <input type="number" id="angle-val" value="90" min="-135" max="135">
             </div>
             <div class="control-row">
                 <label for="len1-val">Length 1 (mm):</label>
@@ -54,6 +54,39 @@
 
     <!-- Right Panel: Holes & Export -->
     <div id="right-panel">
+
+        <div class="panel" id="profile-container">
+            <h3>Profile Properties</h3>
+            <div class="control-row">
+                <label for="inner-width">Width (mm):</label>
+                <input type="number" id="inner-width" value="8.0" min="1" step="0.1">
+            </div>
+            <div class="control-row">
+                <label for="inner-height">Height (mm):</label>
+                <input type="number" id="inner-height" value="9.0" min="1" step="0.1">
+            </div>
+        </div>
+
+        <div class="panel" id="view-container">
+            <h3>View</h3>
+            <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+                <input type="checkbox" id="show-rail" checked>
+                <label for="show-rail">Show Rail</label>
+            </div>
+            <div class="control-row checkbox-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+                <input type="checkbox" id="show-cover" checked>
+                <label for="show-cover">Show Cover</label>
+            </div>
+        </div>
+
+        <div class="panel" id="preview-container">
+            <h3>Profile Preview</h3>
+            <div class="button-group" style="flex-direction: row; justify-content: space-around; margin-bottom: 5px;">
+                <button id="preview-rail-btn" style="flex: 1;">Rail</button>
+                <button id="preview-cover-btn" style="flex: 1;">Cover</button>
+            </div>
+            <canvas id="profile-canvas" width="200" height="150" style="background: #222; border-radius: 4px;"></canvas>
+        </div>
 
         <div class="panel" id="holes-container">
             <h3>Holes</h3>
