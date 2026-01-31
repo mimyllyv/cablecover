@@ -35,8 +35,8 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 // Grid
-const size = 100;
-const divisions = 100;
+const size = 300;
+const divisions = 300;
 const gridHelper = new THREE.GridHelper(size, divisions, 0x444444, 0x333333);
 scene.add(gridHelper);
 
