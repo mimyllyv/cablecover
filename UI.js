@@ -20,7 +20,7 @@ export class UIManager {
             showCover: true,
             innerWidth: 8.0,
             innerHeight: 9.0,
-            tolerance: 0.25
+            clearance: 0.25
         };
 
         this.initListeners();
@@ -97,7 +97,7 @@ export class UIManager {
         
         bindInput('inner-width', 'innerWidth');
         bindInput('inner-height', 'innerHeight');
-        bindInput('tolerance-val', 'tolerance');
+        bindInput('clearance-val', 'clearance');
 
         document.getElementById('show-holes')?.addEventListener('change', (e) => {
             this.state.showCutters = e.target.checked;

@@ -126,10 +126,10 @@ export class ProfilePreview {
         this.ctx.fillStyle = "#ffff00";
         this.drawDimLine(-iw/2, ih/2, iw/2, ih/2, `Inner: ${iw}`);
 
-        // Tolerance Label (Top Left)
+        // Clearance Label (Top Left)
         this.ctx.fillStyle = "#ffffff";
         this.ctx.textAlign = "left";
-        this.ctx.fillText(`Tolerance: ${params.tolerance.toFixed(2)} mm`, 10, 20);
+        this.ctx.fillText(`Clearance: ${params.clearance.toFixed(2)} mm`, 10, 20);
     }
 
     drawDimLine(x1, y1, x2, y2, text, vertical = false) {
