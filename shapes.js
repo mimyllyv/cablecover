@@ -27,7 +27,7 @@ export function createRailShape(innerWidth, innerHeight) {
     return shape;
 }
 
-export function createCoverShape(innerWidth, innerHeight) {
+export function createCoverShape(innerWidth, innerHeight, tolerance = 0.6) {
     const shape = new THREE.Shape();
     
     const halfIW = innerWidth / 2;
@@ -38,7 +38,7 @@ export function createCoverShape(innerWidth, innerHeight) {
     
     const clipR = 1.1;
     const ribR = 2.3;
-    const clawOffset = 0.5;
+    const clawOffset = tolerance - 0.1;
 
     shape.moveTo(0, topY);
     shape.lineTo(halfOW - 0.8, topY);

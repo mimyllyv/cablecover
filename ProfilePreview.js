@@ -24,7 +24,7 @@ export class ProfilePreview {
 
         // Generate Shapes
         const railShape = createRailShape(params.innerWidth, params.innerHeight);
-        const coverShape = createCoverShape(params.innerWidth, params.innerHeight);
+        const coverShape = createCoverShape(params.innerWidth, params.innerHeight, params.tolerance);
 
         const activeShape = (this.mode === 'rail') ? railShape : coverShape;
         const color = (this.mode === 'rail') ? "#00ff00" : "#00aaff";
@@ -121,13 +121,15 @@ export class ProfilePreview {
         const iw = params.innerWidth;
         const ih = params.innerHeight;
         
-        // Inner Width Dim (Green)
+        // Inner Width Dim (Yellow)
         this.ctx.strokeStyle = "#ffff00";
         this.ctx.fillStyle = "#ffff00";
-        // Draw near top or wherever inner cavity is.
-        // Rail Bead is at `ih`. Inner Floor 0.
-        // Let's draw at Y = ih/2.
         this.drawDimLine(-iw/2, ih/2, iw/2, ih/2, `Inner: ${iw}`);
+
+        // Tolerance Label (Top Left)
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.textAlign = "left";
+        this.ctx.fillText(`Tolerance: ${params.tolerance.toFixed(2)} mm`, 10, 20);
     }
 
     drawDimLine(x1, y1, x2, y2, text, vertical = false) {

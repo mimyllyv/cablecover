@@ -105,7 +105,7 @@ export class RailSystem {
 
     generate(params, skipHoles = false) {
         const railShape = createRailShape(params.innerWidth, params.innerHeight);
-        const coverShape = createCoverShape(params.innerWidth, params.innerHeight);
+        const coverShape = createCoverShape(params.innerWidth, params.innerHeight, params.tolerance);
 
         this.clearMeshes();
 
