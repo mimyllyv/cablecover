@@ -172,45 +172,61 @@ export function createConnectorShapes(innerWidth, innerHeight, connClearance, co
             // Inner Sleeve Geometry (Rounded Box-like)
             // User requested: "Rounded parts facing the same end" (Top).
             // So we treat it like the Outer Sleeve: Rounded Top, Flat Bottom.
+            // MODIFICATION: Add step/indent to clear Cover Claws.
             
+            const indent = 0.8; 
+            // Define Taper Zone
+            const yTaperTop = innerHeight - 1.5; // Where full indent is reached
+            const yTaperBottom = innerHeight - 2.5; // Where taper starts
+
             // Dimensions
-            // Outer Boundary of Inner Sleeve (Interface with Rail Inner Wall)
             w_out = halfIW - outerOffset;
             top_out = yCoverInnerTop - outerOffset;
-            bottom_out = 0; // Flat bottom at Floor
+            bottom_out = 0; 
 
-            // Inner Boundary of Inner Sleeve (Free Surface)
             w_in = halfIW - innerOffset;
             top_in = yCoverInnerTop - innerOffset;
             bottom_in = 0;
 
-            // Radii at Top
-            // Cover Top Radius is 0.8. 
-            // Let's use a similar radius for the inner sleeve top to match the look,
-            // or derive it. 
-            // If the outer sleeve has r = 0.8 + offset, 
-            // the inner sleeve (inside) should have r = 0.8 - offset?
-            // Let's assume a default radius of 1.0 for the arch.
-            r_out_top = Math.max(0.1, 1.0 - outerOffset);
+            r_out_top = Math.max(0.1, 1.0 - outerOffset); 
             r_in_top = Math.max(0.1, 1.0 - innerOffset);
 
             // Draw CCW Outer Path
             shape.moveTo(w_out, bottom_out);
-            shape.lineTo(w_out, top_out - r_out_top);
-            shape.absarc(w_out - r_out_top, top_out - r_out_top, r_out_top, 0, Math.PI / 2, false);
-            shape.lineTo(-(w_out - r_out_top), top_out);
-            shape.absarc(-(w_out - r_out_top), top_out - r_out_top, r_out_top, Math.PI / 2, Math.PI, false);
-            shape.lineTo(-w_out, bottom_out);
+            shape.lineTo(w_out, yTaperBottom); // Up to Taper Start
+            shape.lineTo(w_out - indent, yTaperTop); // Taper In
+            shape.lineTo(w_out - indent, top_out - r_out_top); // Up to Top Arc start
+            
+            // Top Right Arc
+            shape.absarc((w_out - indent) - r_out_top, top_out - r_out_top, r_out_top, 0, Math.PI / 2, false);
+            shape.lineTo(-((w_out - indent) - r_out_top), top_out);
+            
+            // Top Left Arc
+            shape.absarc(-((w_out - indent) - r_out_top), top_out - r_out_top, r_out_top, Math.PI / 2, Math.PI, false);
+            
+            shape.lineTo(-(w_out - indent), yTaperTop); // Down to Taper Top
+            shape.lineTo(-w_out, yTaperBottom); // Taper Out
+            shape.lineTo(-w_out, bottom_out); // Down to Bottom
             
             // Connect to Inner Path
             shape.lineTo(-w_in, bottom_in);
             
             // Draw CW Inner Path (Reverse)
-            shape.lineTo(-w_in, top_in - r_in_top);
-            shape.absarc(-(w_in - r_in_top), top_in - r_in_top, r_in_top, Math.PI, Math.PI / 2, true);
-            shape.lineTo(w_in - r_in_top, top_in);
-            shape.absarc(w_in - r_in_top, top_in - r_in_top, r_in_top, Math.PI / 2, 0, true);
-            shape.lineTo(w_in, bottom_in);
+            shape.lineTo(-w_in, yTaperBottom); // Up to Taper Start
+            shape.lineTo(-(w_in - indent), yTaperTop); // Taper In
+            
+            shape.lineTo(-(w_in - indent), top_in - r_in_top); // Up to Arc
+            
+            // Top Left Arc (CW)
+            shape.absarc(-((w_in - indent) - r_in_top), top_in - r_in_top, r_in_top, Math.PI, Math.PI / 2, true);
+            shape.lineTo((w_in - indent) - r_in_top, top_in);
+            
+            // Top Right Arc (CW)
+            shape.absarc((w_in - indent) - r_in_top, top_in - r_in_top, r_in_top, Math.PI / 2, 0, true);
+            
+            shape.lineTo(w_in - indent, yTaperTop); // Down to Taper Top
+            shape.lineTo(w_in, yTaperBottom); // Taper Out
+            shape.lineTo(w_in, bottom_in); // Down to Bottom
             
             // Close
             shape.lineTo(w_out, bottom_out);
@@ -220,76 +236,74 @@ export function createConnectorShapes(innerWidth, innerHeight, connClearance, co
 
     // 3. Generate Specific Shapes
     
+    // Taper/Indent Settings
+    const indent = 0.8; 
+    const yTaperTop = innerHeight - 1.5; 
+    const yTaperBottom = innerHeight - 2.5;
+
     // Outer Sleeve
-    // Outer Offset: Clearance + Wall (Larger)
-    // Inner Offset: Clearance (Smaller)
     const outerSleeve = createUProfile(connClearance + connWallT, connClearance, 'outer');
     
     // Inner Sleeve
     const innerSleeve = createUProfile(connClearance, connClearance + connWallT, 'inner');
     
     // Center Solid Profile
-    // Fills the space from Outer Sleeve Outer Boundary to Inner Sleeve Inner Boundary.
-    // Effectively a "Super U".
-    // Outer Boundary: same as OuterSleeve (offset = connClearance + connWallT)
-    // Inner Boundary: same as InnerSleeve (offset = connClearance + connWallT)
-    // Wait, Center Outer = OuterSleeve Outer.
-    // Center Inner = InnerSleeve Inner.
-    // So we use 'outer' type logic for outer, 'inner' type logic for inner.
-    // Let's manually compose it or make createUProfile flexible?
-    // It's easier to just construct it.
-    
     const centerShape = new THREE.Shape();
     // Trace OuterSleeve Outer Boundary (CCW)
-    // It's the first part of createUProfile('outer', ...).
-    const dummyOuter = createUProfile(connClearance + connWallT, 0, 'outer'); 
-    // Extract points? No, just copy logic.
+    const w_out_c = halfOW + (connClearance + connWallT);
+    const top_out_c = yCoverTop + (connClearance + connWallT);
+    const bottom_out_c = -1.2;
+    const r_out_top_c = 0.8 + (connClearance + connWallT);
     
-    // Reuse dimensions from before
-    const w_out = halfOW + (connClearance + connWallT);
-    const top_out = yCoverTop + (connClearance + connWallT);
-    const bottom_out = -1.2;
-    const r_out_top = 0.8 + (connClearance + connWallT);
-    
-    centerShape.moveTo(w_out, bottom_out);
-    centerShape.lineTo(w_out, top_out - r_out_top);
-    centerShape.absarc(w_out - r_out_top, top_out - r_out_top, r_out_top, 0, Math.PI / 2, false);
-    centerShape.lineTo(-(w_out - r_out_top), top_out);
-    centerShape.absarc(-(w_out - r_out_top), top_out - r_out_top, r_out_top, Math.PI / 2, Math.PI, false);
-    centerShape.lineTo(-w_out, bottom_out);
+    centerShape.moveTo(w_out_c, bottom_out_c);
+    centerShape.lineTo(w_out_c, top_out_c - r_out_top_c);
+    centerShape.absarc(w_out_c - r_out_top_c, top_out_c - r_out_top_c, r_out_top_c, 0, Math.PI / 2, false);
+    centerShape.lineTo(-(w_out_c - r_out_top_c), top_out_c);
+    centerShape.absarc(-(w_out_c - r_out_top_c), top_out_c - r_out_top_c, r_out_top_c, Math.PI / 2, Math.PI, false);
+    centerShape.lineTo(-w_out_c, bottom_out_c);
     
     // Connect to Inner Boundary (Inner Sleeve Inner Wall)
-    // This is the 'inner' type Inner Path logic.
-    // offset = connClearance + connWallT
-    const off_in = connClearance + connWallT;
-    const cx_left = -(halfIW - 1.0);
-    const cx_right = halfIW - 1.0;
-    const cy_bottom = 1.0;
-    const w_in = halfIW - off_in;
-    const top_in = yCoverInnerTop - off_in;
-    const r_in = Math.max(0.1, 1.0 - off_in);
+    // Inner Boundary params
+    const off_in_c = connClearance + connWallT;
+    const cx_left_c = -(halfIW - 1.0);
+    const cx_right_c = halfIW - 1.0;
+    const cy_bottom_c = 1.0;
+    const w_in_c = halfIW - off_in_c;
+    const top_in_c = yCoverInnerTop - off_in_c;
+    const r_in_c = Math.max(0.1, 1.0 - off_in_c);
     
-    // Line to Inner Bottom Left
-    // The Outer ended at (-w_out, -1.2).
-    // The Inner starts at (cx_left, 0) + arc adjustment? 
-    // Inner Sleeve Inner Path starts at bottom of arc: (cx_left, 0).
-    // So we line to (-w_out, 0)? No.
-    // We line to (-w_in_box, 0)?
-    // The Inner Sleeve starts at the Floor (y=0).
-    // The Outer Sleeve starts at the Outer Floor (y=-1.2).
-    // So we line from (-w_out, -1.2) to (-w_out, 0) then in?
-    // Or just line directly to the Inner start point.
-    centerShape.lineTo(cx_left, 0); // Gap closes
+    centerShape.lineTo(cx_left_c, 0); 
     
-    // Trace Inner Path (CW)
-    centerShape.absarc(cx_left, cy_bottom, r_in, 1.5 * Math.PI, Math.PI, true);
-    centerShape.lineTo(-w_in, top_in);
-    centerShape.lineTo(w_in, top_in);
-    centerShape.lineTo(w_in, cy_bottom);
-    centerShape.absarc(cx_right, cy_bottom, r_in, 0, -Math.PI/2, true);
+    // Trace Inner Path (CW) with Taper
+    // Bottom Left Arc
+    centerShape.absarc(cx_left_c, cy_bottom_c, r_in_c, 1.5 * Math.PI, Math.PI, true);
+    
+    // Up to Taper
+    centerShape.lineTo(-w_in_c, yTaperBottom);
+    // Taper In
+    centerShape.lineTo(-(w_in_c - indent), yTaperTop);
+    
+    // Up to Top Left Arc
+    centerShape.lineTo(-(w_in_c - indent), top_in_c - r_in_c);
+    centerShape.absarc(-((w_in_c - indent) - r_in_c), top_in_c - r_in_c, r_in_c, Math.PI, Math.PI / 2, true);
+    
+    // Across Top
+    centerShape.lineTo((w_in_c - indent) - r_in_c, top_in_c);
+    
+    // Top Right Arc
+    centerShape.absarc((w_in_c - indent) - r_in_c, top_in_c - r_in_c, r_in_c, Math.PI / 2, 0, true);
+    
+    // Down to Taper
+    centerShape.lineTo(w_in_c - indent, yTaperTop);
+    // Taper Out
+    centerShape.lineTo(w_in_c, yTaperBottom);
+    
+    // Down to Bottom Right Arc
+    centerShape.lineTo(w_in_c, cy_bottom_c);
+    centerShape.absarc(cx_right_c, cy_bottom_c, r_in_c, 0, -Math.PI/2, true);
     
     // Close
-    centerShape.lineTo(w_out, bottom_out);
+    centerShape.lineTo(w_out_c, bottom_out_c);
 
     return {
         center: centerShape,
