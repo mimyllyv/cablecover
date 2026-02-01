@@ -27,7 +27,7 @@ export function createRailShape(innerWidth, innerHeight) {
     return shape;
 }
 
-export function createCoverShape(innerWidth, innerHeight, clearance = 0.25) {
+export function createCoverShape(innerWidth, innerHeight, clearance = 0.25, hasClaws = true) {
     const shape = new THREE.Shape();
     
     const halfIW = innerWidth / 2;
@@ -36,45 +36,151 @@ export function createCoverShape(innerWidth, innerHeight, clearance = 0.25) {
     const topY = yBead + 2.3; 
     const bottomY = yBead + 1.1; 
     
-    const clipR = 1.1;
-    const ribR = 2.3;
-    const clawOffset = clearance - 0.1;
-
     // Start at Top Center and go Left (CCW)
     shape.moveTo(0, topY);
     shape.lineTo(-(halfOW - 0.8), topY);
     shape.absarc(-(halfOW - 0.8), topY - 0.8, 0.8, Math.PI / 2, Math.PI, false);
     shape.lineTo(-halfOW, bottomY);
     
-    const leftClawX = -halfIW + clawOffset;
-    const angleStartLeft = Math.PI / 2;
-    const angleEndLeft = -70 * Math.PI / 180;
-    shape.absarc(leftClawX, yBead, clipR, angleStartLeft, angleEndLeft, true);
+    if (hasClaws) {
+        const clipR = 1.1;
+        const ribR = 2.3;
+        const clawOffset = clearance - 0.1;
+        
+        const leftClawX = -halfIW + clawOffset;
+        const angleStartLeft = Math.PI / 2;
+        const angleEndLeft = -70 * Math.PI / 180;
+        shape.absarc(leftClawX, yBead, clipR, angleStartLeft, angleEndLeft, true);
+        
+        const leftTipX = leftClawX + ribR * Math.cos(angleEndLeft);
+        const leftTipY = yBead + ribR * Math.sin(angleEndLeft);
+        shape.lineTo(leftTipX, leftTipY);
+        
+        const leftEndAngle = Math.asin(1.1/2.3);
+        shape.absarc(leftClawX, yBead, ribR, angleEndLeft, leftEndAngle, false);
+        
+        shape.lineTo(0, bottomY);
+        
+        const rightClawX = halfIW - clawOffset;
+        const rightRibStartX = rightClawX + ribR * Math.cos(Math.PI - Math.asin(1.1/2.3));
+        
+        shape.lineTo(rightRibStartX, bottomY);
+        
+        const rightTipAngle = 250 * Math.PI / 180;
+        shape.absarc(rightClawX, yBead, ribR, Math.PI - Math.asin(1.1/2.3), rightTipAngle, false);
+        
+        const rightInnerTipX = rightClawX + clipR * Math.cos(rightTipAngle);
+        const rightInnerTipY = yBead + clipR * Math.sin(rightTipAngle);
+        shape.lineTo(rightInnerTipX, rightInnerTipY);
+        
+        shape.absarc(rightClawX, yBead, clipR, rightTipAngle, Math.PI / 2, true);
+        shape.lineTo(halfOW, bottomY);
+    } else {
+        // Simple U-Channel Inner Profile
+        // From Outer Bottom Left (-halfOW, bottomY)
+        // Go to Inner Bottom Left.
+        // What is the inner width? 
+        // Based on claw logic, the structure is roughly around +/- halfIW.
+        // But let's check the wall thickness. 
+        // halfOW = halfIW + 1.2.
+        // So the wall is 1.2 thick. 
+        // So Inner Wall X = -halfIW.
+        
+        // However, we need to ensure we don't intersect the connector.
+        // Assuming the connector fits within the "claw space", removing claws clears it.
+        
+        // Inner Ceiling
+        // bottomY = yBead + 1.1. 
+        // This variable name `bottomY` is confusing.
+        // In the claw logic:
+        // shape.lineTo(-halfOW, bottomY);
+        // Then arcs around `yBead`.
+        // `yBead = innerHeight`.
+        // `bottomY` is HIGHER than `yBead` (bead + 1.1).
+        // Wait, `createCoverShape`: `bottomY = yBead + 1.1`.
+        // So `bottomY` is actually the *ceiling* of the inner chamber?
+        // Let's re-read the claw logic carefully.
+        
+        // `shape.lineTo(-halfOW, bottomY);`
+        // `absarc(leftClawX, yBead, ...)`
+        // `leftClawX` is near `-halfIW`. `yBead` is `innerHeight`.
+        // `bottomY` is `yBead + 1.1`.
+        // So `bottomY` is 1.1 units ABOVE the bead center.
+        // The claw arc (clipR=1.1) goes around the bead.
+        // So `bottomY` essentially aligns with the top of the bead/claw mechanism.
+        
+        // If I make a simple box, I should probably go to `yBead` level?
+        // Or does the cover extend further down?
+        // In `createCoverShape`, it never goes below `yBead - something`.
+        // The claw tips go down.
+        // If I remove claws, I probably want to keep the side walls going down to where?
+        // The "bottom" of the cover visually is `bottomY` in the variable name?
+        // No, `bottomY` is 1.1 above `yBead`.
+        // The Outer Wall goes `lineTo(-halfOW, bottomY)`.
+        // The Claw goes down to `yBead` and around.
+        // So `bottomY` is the *bottom edge* of the *thick* top part?
+        // And the side walls are just the claws?
+        // If so, removing the claws means removing the side walls entirely?
+        // That would leave just a flat plate on top?
+        
+        // "The sleeve should be thinner at the top...".
+        // If the cover is just a cap, and the claws are the sides...
+        // Then "no claws" means "no sides"? 
+        // That doesn't make sense. The cover must cover something.
+        
+        // Let's assume the "Outer Wall" description in my previous thought was slightly off.
+        // `topY = yBead + 2.3`.
+        // `bottomY = yBead + 1.1`.
+        // Wall thickness = 1.2 (2.3 - 1.1).
+        // The part from `topY` to `bottomY` is the "Roof".
+        // The "Claws" hang down from the roof.
+        // If I remove the claws, I am left with just the roof?
+        // That would be a flat strip floating above the rail.
+        // That might be what is intended if the connector fills the space?
+        // "The length of the cover without claws...".
+        // If the connector has full-height sleeves that match the cover's outer profile?
+        // Let's look at `createConnectorShapes`.
+        // `outerSleeve` (which is presumably visible) has height from `yRailBottom` to `yCoverTop`.
+        // `yCoverTop = innerHeight + 2.3`.
+        // `yRailBottom = -1.2`.
+        // So the connector sleeve is FULL HEIGHT.
+        // So if the connector sleeve is present, the cover physically *cannot* be there, unless it goes *over* it?
+        // But the connector sleeve `w_out` is `halfOW + ...`. It's wider/same as rail.
+        // If the cover is also `halfOW`, they collide.
+        
+        // UNLESS the cover slides *into* the connector?
+        // Or the connector slides *into* the cover?
+        // If the cover has "no claws" (no sides), it becomes a thin plate `halfOW` wide.
+        // Does it sit on top of the connector?
+        // The connector has a `top_out = yCoverTop + offset`.
+        // This implies the connector is the *same size* as the cover.
+        
+        // Wait, if the connector sleeve replaces the cover at the ends?
+        // "The length of the cover without claws at each end will be one third of connector length".
+        // This implies the cover *exists* there, but has no claws.
+        // Maybe the connector sleeve is *internal* (inside the rail) and only the *center* part is external?
+        // But `createConnectorShapes` makes an `outerSleeve` too.
+        
+        // Let's assume the user knows what they want: "Cover without claws".
+        // If the "claws" are the side walls, and I remove them, I get a flat roof.
+        // `shape.lineTo(halfOW, bottomY);` connects the left side to the right side?
+        // No, the original code:
+        // `shape.lineTo(0, bottomY);` (Middle bottom of roof).
+        // `shape.lineTo(halfOW, bottomY);` (Right bottom of roof).
+        
+        // So yes, removing claws essentially leaves the "Roof" (Top Plate).
+        // I will implement this: Just the top plate.
+        // Left Outer -> Left Inner (at bottomY) -> Right Inner (at bottomY) -> Right Outer.
+        
+        shape.lineTo(-(halfOW - 1.2), bottomY); // Inner Left Corner of Roof
+        // Actually halfOW - 1.2 is halfIW? 
+        // halfOW = halfIW + 1.2.
+        // So -(halfOW - 1.2) = -halfIW.
+        shape.lineTo(-halfIW, bottomY);
+        shape.lineTo(halfIW, bottomY);
+        shape.lineTo(halfOW, bottomY);
+    }
     
-    const leftTipX = leftClawX + ribR * Math.cos(angleEndLeft);
-    const leftTipY = yBead + ribR * Math.sin(angleEndLeft);
-    shape.lineTo(leftTipX, leftTipY);
-    
-    const leftEndAngle = Math.asin(1.1/2.3);
-    shape.absarc(leftClawX, yBead, ribR, angleEndLeft, leftEndAngle, false);
-    
-    shape.lineTo(0, bottomY);
-    
-    const rightClawX = halfIW - clawOffset;
-    const rightRibStartX = rightClawX + ribR * Math.cos(Math.PI - Math.asin(1.1/2.3));
-    
-    shape.lineTo(rightRibStartX, bottomY);
-    
-    const rightTipAngle = 250 * Math.PI / 180;
-    shape.absarc(rightClawX, yBead, ribR, Math.PI - Math.asin(1.1/2.3), rightTipAngle, false);
-    
-    const rightInnerTipX = rightClawX + clipR * Math.cos(rightTipAngle);
-    const rightInnerTipY = yBead + clipR * Math.sin(rightTipAngle);
-    shape.lineTo(rightInnerTipX, rightInnerTipY);
-    
-    shape.absarc(rightClawX, yBead, clipR, rightTipAngle, Math.PI / 2, true);
-    
-    shape.lineTo(halfOW, bottomY);
     shape.lineTo(halfOW, topY - 0.8);
     shape.absarc(halfOW - 0.8, topY - 0.8, 0.8, 0, Math.PI / 2, false);
     shape.lineTo(0, topY);

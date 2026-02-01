@@ -105,29 +105,11 @@ export class RailSystem {
 
     generate(params, skipHoles = false) {
         const railShape = createRailShape(params.innerWidth, params.innerHeight);
-        const coverShape = createCoverShape(params.innerWidth, params.innerHeight, params.clearance);
 
         this.clearMeshes();
 
         let railGeometry, coverGeometry;
         let path = null;
-
-        if (params.isAngledMode) {
-            path = this.createRoundedPath(params.len1, params.len2, params.angle, params.radius, params.turnAxis);
-            const extrudeSettings = { steps: 200, extrudePath: path, bevelEnabled: false };
-            railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
-            coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
-        } else {
-            const extrudeSettings = { steps: 1, depth: params.length, bevelEnabled: false };
-            railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
-            railGeometry.computeBoundingBox();
-            const zOffset = -params.length / 2;
-            const yOffset = -railGeometry.boundingBox.min.y;
-            railGeometry.translate(-10, yOffset, zOffset);
-            
-            coverGeometry = new THREE.ExtrudeGeometry(coverShape, extrudeSettings);
-            coverGeometry.translate(-10, yOffset, zOffset);
-        }
 
         const checkNaN = (geo) => {
             if (!geo || !geo.attributes.position) return false;
@@ -137,6 +119,49 @@ export class RailSystem {
             }
             return false;
         };
+
+        if (params.isAngledMode) {
+            path = this.createRoundedPath(params.len1, params.len2, params.angle, params.radius, params.turnAxis);
+            const extrudeSettings = { steps: 200, extrudePath: path, bevelEnabled: false };
+            railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
+            coverGeometry = new THREE.ExtrudeGeometry(createCoverShape(params.innerWidth, params.innerHeight, params.clearance, true), extrudeSettings);
+        } else {
+            const extrudeSettings = { steps: 1, depth: params.length, bevelEnabled: false };
+            railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
+            railGeometry.computeBoundingBox();
+            const zOffset = -params.length / 2;
+            const yOffset = -railGeometry.boundingBox.min.y;
+            railGeometry.translate(-10, yOffset, zOffset);
+            
+            // New Logic for Cover: Segments with/without claws
+            const sleeveLen = params.connLength / 3.0;
+            
+            if (params.length > 2 * sleeveLen) {
+                const midLen = params.length - 2 * sleeveLen;
+                
+                const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
+                const shapeClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, true);
+                
+                // 1. Start (No Claws)
+                const geoStart = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
+                
+                // 2. Middle (Claws)
+                const geoMid = new THREE.ExtrudeGeometry(shapeClaws, { depth: midLen, bevelEnabled: false, steps: 1 });
+                geoMid.translate(0, 0, sleeveLen);
+                
+                // 3. End (No Claws)
+                const geoEnd = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
+                geoEnd.translate(0, 0, sleeveLen + midLen);
+                
+                coverGeometry = BufferGeometryUtils.mergeGeometries([geoStart, geoMid, geoEnd]);
+            } else {
+                // Short segment, use No Claws entirely
+                 const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
+                 coverGeometry = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: params.length, bevelEnabled: false, steps: 1 });
+            }
+
+            coverGeometry.translate(-10, yOffset, zOffset);
+        }
 
         if (checkNaN(railGeometry) || checkNaN(coverGeometry)) {
             console.error("Generated geometry contains NaN values. Aborting mesh update.");
