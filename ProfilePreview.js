@@ -1,4 +1,4 @@
-import { createRailShape, createCoverShape } from './shapes.js';
+import { createRailShape, createCoverShape, createConnectorShapes } from './shapes.js';
 
 export class ProfilePreview {
     constructor(canvasId) {
@@ -24,10 +24,24 @@ export class ProfilePreview {
 
         // Generate Shapes
         const railShape = createRailShape(params.innerWidth, params.innerHeight);
-        const coverShape = createCoverShape(params.innerWidth, params.innerHeight, params.tolerance);
+        const coverShape = createCoverShape(params.innerWidth, params.innerHeight, params.clearance);
+        
+        let activeShape;
+        let color = "#00ff00";
 
-        const activeShape = (this.mode === 'rail') ? railShape : coverShape;
-        const color = (this.mode === 'rail') ? "#00ff00" : "#00aaff";
+        if (this.mode === 'connector') {
+            const { center, outerSleeve, innerSleeve } = createConnectorShapes(
+                params.innerWidth, params.innerHeight, params.connClearance, params.connWall
+            );
+            // We want to visualize the sleeve walls primarily.
+            // Let's create a composite visual.
+            // Or just pick outerSleeve for bounding calculation?
+            activeShape = outerSleeve; // Use outer sleeve for bounds
+            color = "#ff8800";
+        } else {
+            activeShape = (this.mode === 'rail') ? railShape : coverShape;
+            color = (this.mode === 'rail') ? "#00ff00" : "#00aaff";
+        }
 
         // 1. Calculate Bounds for Auto-Fit
         const points = activeShape.getPoints();
@@ -68,7 +82,27 @@ export class ProfilePreview {
         });
 
         // 2. Draw Shape
-        this.drawShape(points, color);
+        if (this.mode === 'connector') {
+             const { center, outerSleeve, innerSleeve } = createConnectorShapes(
+                params.innerWidth, params.innerHeight, params.connClearance, params.connWall
+            );
+            
+            // Draw Center (Gray, Dashed?) - It represents the solid fill
+            this.ctx.setLineDash([2, 2]);
+            this.drawShape(center.getPoints(), "#888888");
+            this.ctx.setLineDash([]);
+            
+            // Draw Inner Sleeve (Red)
+            this.drawShape(innerSleeve.getPoints(), "#ff4444");
+            if(innerSleeve.holes.length > 0) this.drawShape(innerSleeve.holes[0].getPoints(), "#ff4444");
+
+            // Draw Outer Sleeve (Orange)
+            this.drawShape(outerSleeve.getPoints(), "#ffaa00");
+            if(outerSleeve.holes.length > 0) this.drawShape(outerSleeve.holes[0].getPoints(), "#ffaa00");
+
+        } else {
+            this.drawShape(points, color);
+        }
 
         // 3. Draw Measurements
         this.drawMeasurements(params, minX, maxX, minY, maxY);

@@ -3,7 +3,7 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { createRailShape, createCoverShape } from './shapes.js';
+import { createRailShape, createCoverShape, createConnectorShapes } from './shapes.js';
 
 // Apply BVH extension
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -215,7 +215,14 @@ export class RailSystem {
     }
 
     exportSTL(type, params) {
-        const mesh = type === 'rail' ? this.meshes.rail : this.meshes.cover;
+        let mesh;
+        
+        if (type === 'connector') {
+            mesh = this.createConnectorMesh(params);
+        } else {
+            mesh = type === 'rail' ? this.meshes.rail : this.meshes.cover;
+        }
+
         if (!mesh) return;
     
         const exportMesh = mesh.clone();
@@ -253,8 +260,9 @@ export class RailSystem {
         exportMesh.rotation.set(0, 0, 0);
         exportMesh.updateMatrixWorld();
         
-        // 4. Ensure normals are correct
-        this._fixNormals(exportMesh);
+        // 4. Final Prep
+        exportMesh.geometry = BufferGeometryUtils.mergeVertices(exportMesh.geometry);
+        exportMesh.geometry.computeVertexNormals();
     
         const exporter = new STLExporter();
         const result = exporter.parse(exportMesh, { binary: true });
@@ -306,5 +314,63 @@ export class RailSystem {
     updateComponentVisibility(showRail, showCover) {
         if (this.meshes.rail) this.meshes.rail.visible = showRail;
         if (this.meshes.cover) this.meshes.cover.visible = showCover;
+    }
+
+    createConnectorMesh(params) {
+        const { center, outerSleeve, innerSleeve } = createConnectorShapes(
+            params.innerWidth, 
+            params.innerHeight, 
+            params.connClearance, 
+            params.connWall
+        );
+
+        const totalLen = params.connLength;
+        const sectionLen = totalLen / 3.0;
+
+        // 1. Center Section (Solid Stop)
+        // Middle 1/3: Z = -sectionLen/2 to sectionLen/2
+        const centerGeo = new THREE.ExtrudeGeometry(center, { depth: sectionLen, bevelEnabled: false, steps: 1 });
+        centerGeo.translate(0, 0, -sectionLen / 2);
+
+        // 2. Sleeves (Ends only)
+        // We need Front (Z > sectionLen/2) and Back (Z < -sectionLen/2) parts.
+        // Each part has length = sectionLen.
+        
+        // Front Sleeve (Outer + Inner)
+        // Position: Z = sectionLen/2 to sectionLen/2 + sectionLen (which is totalLen/2)
+        // Extrude depth = sectionLen.
+        // Initial extrusion is 0 to D. Translate to sectionLen/2.
+        
+        const frontOuter = new THREE.ExtrudeGeometry(outerSleeve, { depth: sectionLen, bevelEnabled: false, steps: 1 });
+        frontOuter.translate(0, 0, sectionLen / 2);
+        
+        const frontInner = new THREE.ExtrudeGeometry(innerSleeve, { depth: sectionLen, bevelEnabled: false, steps: 1 });
+        frontInner.translate(0, 0, sectionLen / 2);
+
+        // Back Sleeve (Outer + Inner)
+        // Position: Z = -sectionLen/2 - sectionLen to -sectionLen/2.
+        // Translate to -sectionLen/2 - sectionLen = -1.5 * sectionLen
+        const backOuter = new THREE.ExtrudeGeometry(outerSleeve, { depth: sectionLen, bevelEnabled: false, steps: 1 });
+        backOuter.translate(0, 0, -1.5 * sectionLen);
+
+        const backInner = new THREE.ExtrudeGeometry(innerSleeve, { depth: sectionLen, bevelEnabled: false, steps: 1 });
+        backInner.translate(0, 0, -1.5 * sectionLen);
+
+        // Merge all 5 parts
+        // Center + Front(Outer/Inner) + Back(Outer/Inner)
+        // This ensures no volumetric overlap, only touching faces at Z boundaries.
+        
+        const mergedGeo = BufferGeometryUtils.mergeGeometries([
+            centerGeo, 
+            frontOuter, frontInner,
+            backOuter, backInner
+        ]);
+        
+        // Optional: mergeVertices to weld the seams
+        const weldedGeo = BufferGeometryUtils.mergeVertices(mergedGeo);
+        
+        const mesh = new THREE.Mesh(weldedGeo, this.materials.rail); 
+        
+        return mesh;
     }
 }

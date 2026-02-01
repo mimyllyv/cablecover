@@ -20,7 +20,10 @@ export class UIManager {
             showCover: true,
             innerWidth: 8.0,
             innerHeight: 9.0,
-            clearance: 0.25
+            clearance: 0.25,
+            connClearance: 0.15,
+            connLength: 3.0,
+            connWall: 1.2
         };
 
         this.initListeners();
@@ -98,6 +101,10 @@ export class UIManager {
         bindInput('inner-width', 'innerWidth');
         bindInput('inner-height', 'innerHeight');
         bindInput('clearance-val', 'clearance');
+        
+        bindInput('conn-clearance', 'connClearance');
+        bindInput('conn-length', 'connLength');
+        bindInput('conn-wall', 'connWall');
 
         document.getElementById('show-holes')?.addEventListener('change', (e) => {
             this.state.showCutters = e.target.checked;
@@ -116,6 +123,7 @@ export class UIManager {
 
         document.getElementById('export-rail')?.addEventListener('click', () => this.railSystem.exportSTL('rail', this.state));
         document.getElementById('export-cover')?.addEventListener('click', () => this.railSystem.exportSTL('cover', this.state));
+        document.getElementById('export-connector')?.addEventListener('click', () => this.railSystem.exportSTL('connector', this.state));
 
         document.getElementById('preview-rail-btn')?.addEventListener('click', () => {
             this.preview.setMode('rail');
@@ -123,6 +131,10 @@ export class UIManager {
         });
         document.getElementById('preview-cover-btn')?.addEventListener('click', () => {
             this.preview.setMode('cover');
+            this.preview.update(this.state);
+        });
+        document.getElementById('preview-connector-btn')?.addEventListener('click', () => {
+            this.preview.setMode('connector');
             this.preview.update(this.state);
         });
     }

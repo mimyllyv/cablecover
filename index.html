@@ -76,6 +76,7 @@
                 <div class="button-group" style="flex-direction: row; justify-content: space-around; margin-bottom: 5px;">
                     <button id="preview-rail-btn" style="flex: 1;">Rail</button>
                     <button id="preview-cover-btn" style="flex: 1;">Cover</button>
+                    <button id="preview-connector-btn" style="flex: 1;">Conn</button>
                 </div>
                 <canvas id="profile-canvas" width="200" height="150" style="background: #222; border-radius: 4px;"></canvas>
             </div>
@@ -95,6 +96,20 @@
                 <div class="control-row">
                     <label for="clearance-val">Clearance (mm):</label>
                     <input type="number" id="clearance-val" value="0.25" min="0.00" max="1.00" step="0.01">
+                </div>
+                
+                <h4 style="margin: 10px 0 5px 0; color: #aaa; border-bottom: 1px solid #444;">Connector</h4>
+                <div class="control-row">
+                    <label for="conn-clearance">Conn. Clear (mm):</label>
+                    <input type="number" id="conn-clearance" value="0.15" min="0.00" step="0.01">
+                </div>
+                <div class="control-row">
+                    <label for="conn-length">Length (mm):</label>
+                    <input type="number" id="conn-length" value="3.0" min="1.0" step="0.1">
+                </div>
+                <div class="control-row">
+                    <label for="conn-wall">Wall T (mm):</label>
+                    <input type="number" id="conn-wall" value="1.2" min="0.4" step="0.1">
                 </div>
             </div>
         </div>
@@ -135,6 +150,7 @@
             <div class="panel-content">
                 <button id="export-rail">Rail (.stl)</button>
                 <button id="export-cover">Cover (.stl)</button>
+                <button id="export-connector">Connector (.stl)</button>
             </div>
         </div>
 
