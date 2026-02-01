@@ -22,8 +22,8 @@ export class UIManager {
             innerHeight: 9.0,
             clearance: 0.25,
             connClearance: 0.15,
-            connLength: 3.0,
-            connWall: 1.2
+            connLength: 5.0,
+            connWall: 0.8
         };
 
         this.initListeners();
