@@ -124,7 +124,82 @@ export class RailSystem {
             path = this.createRoundedPath(params.len1, params.len2, params.angle, params.radius, params.turnAxis);
             const extrudeSettings = { steps: 200, extrudePath: path, bevelEnabled: false };
             railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
-            coverGeometry = new THREE.ExtrudeGeometry(createCoverShape(params.innerWidth, params.innerHeight, params.clearance, true), extrudeSettings);
+            
+            // New Logic for Cover: Segments with/without claws (Angled)
+            const sleeveLen = params.connLength / 3.0;
+            
+            // Re-calculate geometric points to define split segments
+            const theta = (params.angle * Math.PI) / 180;
+            // logic from createRoundedPath to get lengths
+            const tanDistRaw = Math.abs(params.radius * Math.tan(theta / 2));
+            const maxTan = Math.min(params.len1, params.len2) - 0.1; 
+            const tanDist = (tanDistRaw > maxTan) ? Math.max(0, maxTan) : tanDistRaw;
+            
+            const seg1Len = Math.max(0, params.len1 - tanDist);
+            const seg2Len = Math.max(0, params.len2 - tanDist);
+
+            if (seg1Len > sleeveLen && seg2Len > sleeveLen) {
+                const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
+                const shapeClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, true);
+
+                // Vectors
+                const start = new THREE.Vector3(0,0,0);
+                const p1 = new THREE.Vector3(0,0, seg1Len); 
+                const pCorner = new THREE.Vector3(0,0, params.len1);
+                
+                let dir2;
+                if (params.turnAxis === 'vertical') {
+                     dir2 = new THREE.Vector3(0, Math.sin(theta), Math.cos(theta));
+                } else {
+                     dir2 = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+                }
+                
+                const p2 = pCorner.clone().add(dir2.clone().multiplyScalar(tanDist)); 
+                const end = p2.clone().add(dir2.clone().multiplyScalar(seg2Len));
+
+                // --- Path 1: Start (No Claws) ---
+                const path1 = new THREE.CurvePath();
+                const pSplit1 = new THREE.Vector3(0,0, sleeveLen);
+                path1.add(new THREE.LineCurve3(start, pSplit1));
+                
+                // --- Path 2: Middle (Claws) ---
+                const path2 = new THREE.CurvePath();
+                path2.add(new THREE.LineCurve3(pSplit1, p1));
+                path2.add(new THREE.QuadraticBezierCurve3(p1, pCorner, p2));
+                
+                const pSplit2 = end.clone().sub(dir2.clone().multiplyScalar(sleeveLen));
+                path2.add(new THREE.LineCurve3(p2, pSplit2));
+                
+                // --- Part 3: End (No Claws) ---
+                // Replaced path3 with manual transform to avoid ExtrudeGeometry singularities
+                const geoStart = new THREE.ExtrudeGeometry(shapeNoClaws, { steps: 1, extrudePath: path1, bevelEnabled: false });
+                const geoMid = new THREE.ExtrudeGeometry(shapeClaws, { steps: 200, extrudePath: path2, bevelEnabled: false });
+                
+                const geoEnd = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
+                
+                // Explicitly rotate based on turn params to ensure correct orientation (prevent twisting)
+                const q = new THREE.Quaternion();
+                if (params.turnAxis === 'vertical') {
+                    // Vertical turn: Rotate around X. 
+                    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -theta);
+                } else {
+                    // Horizontal turn: Rotate around Y.
+                    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), theta);
+                }
+                
+                // Correction: Roll -90 degrees around Z before directional rotation to match geoMid twist
+                const qRoll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+                q.multiply(qRoll);
+
+                geoEnd.applyQuaternion(q);
+                geoEnd.translate(pSplit2.x, pSplit2.y, pSplit2.z);
+                
+                coverGeometry = BufferGeometryUtils.mergeGeometries([geoStart, geoMid, geoEnd]);
+            } else {
+                // Too short segments -> Full No Claws
+                const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
+                coverGeometry = new THREE.ExtrudeGeometry(shapeNoClaws, extrudeSettings);
+            }
         } else {
             const extrudeSettings = { steps: 1, depth: params.length, bevelEnabled: false };
             railGeometry = new THREE.ExtrudeGeometry(railShape, extrudeSettings);
