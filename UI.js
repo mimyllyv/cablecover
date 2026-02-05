@@ -35,15 +35,18 @@ export class UIManager {
         if (this.updateTimeout) clearTimeout(this.updateTimeout);
 
         if (immediate) {
-             this.railSystem.generate(this.state, false); 
-             this.updateVisibility();
+             this.railSystem.generate(this.state, false).then(() => {
+                 this.updateVisibility();
+             });
         } else {
-            this.railSystem.generate(this.state, true);
-            this.updateVisibility();
+            this.railSystem.generate(this.state, true).then(() => {
+                this.updateVisibility();
+            });
 
             this.updateTimeout = setTimeout(() => {
-                this.railSystem.generate(this.state, false);
-                this.updateVisibility();
+                this.railSystem.generate(this.state, false).then(() => {
+                    this.updateVisibility();
+                });
             }, 1000);
         }
     }

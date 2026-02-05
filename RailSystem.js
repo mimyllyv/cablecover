@@ -1,19 +1,76 @@
 import * as THREE from 'three';
-import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createRailShape, createCoverShape, createConnectorShapes } from './shapes.js';
+import Module from 'manifold-3d';
 
-// Apply BVH extension
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
+// Initialize Manifold WASM module
+let manifoldModule = null;
+let Manifold = null;
+let ManifoldMesh = null;
+
+async function initManifold() {
+    if (manifoldModule) return;
+    // Use locateFile to load WASM from local path (works with static hosting)
+    manifoldModule = await Module({
+        locateFile: (file) => {
+            if (file.endsWith('.wasm')) {
+                return './manifold.wasm';
+            }
+            return file;
+        }
+    });
+    manifoldModule.setup();
+    Manifold = manifoldModule.Manifold;
+    ManifoldMesh = manifoldModule.Mesh;
+}
+
+// Convert Three.js BufferGeometry to Manifold Mesh
+function geometry2mesh(geometry) {
+    const pos = geometry.attributes.position;
+    const vertProperties = new Float32Array(pos.array);
+
+    // Get or generate indices
+    let triVerts;
+    if (geometry.index) {
+        triVerts = new Uint32Array(geometry.index.array);
+    } else {
+        triVerts = new Uint32Array(pos.count).map((_, idx) => idx);
+    }
+
+    const mesh = new ManifoldMesh({
+        numProp: 3,
+        vertProperties,
+        triVerts
+    });
+    mesh.merge();
+    return mesh;
+}
+
+// Convert Manifold Mesh back to Three.js BufferGeometry
+function mesh2geometry(mesh) {
+    const geometry = new THREE.BufferGeometry();
+
+    // Expand to non-indexed geometry for proper flat shading
+    const numTris = mesh.triVerts.length / 3;
+    const positions = new Float32Array(mesh.triVerts.length * 3);
+
+    for (let i = 0; i < mesh.triVerts.length; i++) {
+        const vertIdx = mesh.triVerts[i];
+        positions[i * 3] = mesh.vertProperties[vertIdx * 3];
+        positions[i * 3 + 1] = mesh.vertProperties[vertIdx * 3 + 1];
+        positions[i * 3 + 2] = mesh.vertProperties[vertIdx * 3 + 2];
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+}
 
 export class RailSystem {
     constructor(scene) {
         this.scene = scene;
-        this.csgEvaluator = new Evaluator();
+        this.manifoldReady = initManifold();
         
         this.materials = {
             rail: new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide }),
@@ -108,7 +165,7 @@ export class RailSystem {
         return path;
     }
 
-    generate(params, skipHoles = false) {
+    async generate(params, skipHoles = false) {
         const railShape = createRailShape(params.innerWidth, params.innerHeight);
 
         this.clearMeshes();
@@ -259,14 +316,15 @@ export class RailSystem {
         }
 
         if (!skipHoles && params.holeCount > 0 && params.holeDiameter > 0) {
-            let railBrush = new Brush(railGeometry, this.materials.rail);
-            railBrush.updateMatrixWorld();
-            let resultBrush = railBrush;
+            await this.manifoldReady;
+
             const cylinderGeo = new THREE.CylinderGeometry(params.holeDiameter / 2, params.holeDiameter / 2, 12.5, 32);
-            this.tempGeometries.push(cylinderGeo); // Track for disposal
+            this.tempGeometries.push(cylinderGeo);
+
+            // Convert rail geometry to Manifold
+            let railManifold = new Manifold(geometry2mesh(railGeometry));
 
             for (let i = 0; i < params.holeCount; i++) {
-                const holeBrush = new Brush(cylinderGeo, this.materials.rail);
                 let pos = new THREE.Vector3();
                 let quat = new THREE.Quaternion();
 
@@ -288,18 +346,28 @@ export class RailSystem {
                     pos.set(-10, 0, zPos);
                 }
 
-                holeBrush.position.copy(pos);
-                holeBrush.quaternion.copy(quat);
-                holeBrush.updateMatrixWorld();
-                resultBrush = this.csgEvaluator.evaluate(resultBrush, holeBrush, SUBTRACTION);
+                // Clone and transform cylinder geometry
+                const holeGeo = cylinderGeo.clone();
+                const matrix = new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(1, 1, 1));
+                holeGeo.applyMatrix4(matrix);
 
+                // Convert to Manifold and subtract
+                const holeManifold = new Manifold(geometry2mesh(holeGeo));
+                railManifold = Manifold.difference(railManifold, holeManifold);
+                holeGeo.dispose();
+
+                // Visual hole
                 const visualHole = new THREE.Mesh(cylinderGeo, this.materials.cutter);
                 visualHole.position.copy(pos);
                 visualHole.quaternion.copy(quat);
                 visualHole.visible = params.showCutters;
                 this.meshes.visuals.push(visualHole);
             }
-            this.meshes.rail = resultBrush;
+
+            // Convert back to Three.js geometry
+            const resultGeometry = mesh2geometry(railManifold.getMesh());
+            resultGeometry.computeVertexNormals();
+            this.meshes.rail = new THREE.Mesh(resultGeometry, this.materials.rail);
         } else {
             this.meshes.rail = new THREE.Mesh(railGeometry, this.materials.rail);
         }
@@ -376,11 +444,10 @@ export class RailSystem {
         exportMesh.rotation.set(0, 0, 0);
         exportMesh.updateMatrixWorld();
         
-        // 4. Final Prep
+        // 4. Final Prep - Clean up CSG artifacts
         const oldGeometry = exportMesh.geometry;
-        exportMesh.geometry = BufferGeometryUtils.mergeVertices(exportMesh.geometry);
+        exportMesh.geometry = this._cleanGeometryForExport(exportMesh.geometry);
         oldGeometry.dispose();
-        exportMesh.geometry.computeVertexNormals();
     
         const exporter = new STLExporter();
         const result = exporter.parse(exportMesh, { binary: true });
@@ -391,39 +458,12 @@ export class RailSystem {
         link.click();
     }
 
-    _fixNormals(mesh) {
-        if (!mesh.geometry) return;
-        if (!mesh.geometry.index) mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry);
-        const geom = mesh.geometry;
-        geom.computeBoundsTree();
-        const pos = geom.attributes.position;
-        const index = geom.index;
-        const raycaster = new THREE.Raycaster();
-        raycaster.firstHitOnly = false;
-        const count = index.count / 3;
-        const pA = new THREE.Vector3(), pB = new THREE.Vector3(), pC = new THREE.Vector3();
-        const center = new THREE.Vector3(), normal = new THREE.Vector3(), direction = new THREE.Vector3();
-        for (let i = 0; i < count; i++) {
-            const a = index.getX(i * 3);
-            const b = index.getX(i * 3 + 1);
-            const c = index.getX(i * 3 + 2);
-            pA.fromBufferAttribute(pos, a); pB.fromBufferAttribute(pos, b); pC.fromBufferAttribute(pos, c);
-            center.addVectors(pA, pB).add(pC).multiplyScalar(1/3);
-            const cb = new THREE.Vector3().subVectors(pC, pB);
-            const ab = new THREE.Vector3().subVectors(pA, pB);
-            normal.crossVectors(cb, ab).normalize();
-            const start = center.clone().addScaledVector(normal, 0.001);
-            direction.copy(normal);
-            raycaster.set(start, direction);
-            if (raycaster.intersectObject(mesh, true).length % 2 !== 0) {
-                index.setX(i * 3 + 1, c);
-                index.setX(i * 3 + 2, b);
-            }
-        }
-        index.needsUpdate = true;
-        geom.disposeBoundsTree();
-        geom.computeVertexNormals();
+    _cleanGeometryForExport(geometry) {
+        // Manifold produces clean geometry, just compute normals
+        geometry.computeVertexNormals();
+        return geometry;
     }
+
 
     updateCuttersVisibility(visible) {
         this.meshes.visuals.forEach(v => v.visible = visible);
