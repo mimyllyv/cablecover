@@ -172,10 +172,7 @@ export function createCoverShape(innerWidth, innerHeight, clearance = 0.25, hasC
         // I will implement this: Just the top plate.
         // Left Outer -> Left Inner (at bottomY) -> Right Inner (at bottomY) -> Right Outer.
         
-        shape.lineTo(-(halfOW - 1.2), bottomY); // Inner Left Corner of Roof
-        // Actually halfOW - 1.2 is halfIW? 
-        // halfOW = halfIW + 1.2.
-        // So -(halfOW - 1.2) = -halfIW.
+        // Simple flat bottom connecting left wall to right wall
         shape.lineTo(-halfIW, bottomY);
         shape.lineTo(halfIW, bottomY);
         shape.lineTo(halfOW, bottomY);
@@ -280,10 +277,10 @@ export function createConnectorShapes(innerWidth, innerHeight, connClearance, co
             // So we treat it like the Outer Sleeve: Rounded Top, Flat Bottom.
             // MODIFICATION: Add step/indent to clear Cover Claws.
             
-            const indent = 0.8; 
-            // Define Taper Zone
-            const yTaperTop = innerHeight - 1.5; // Where full indent is reached
-            const yTaperBottom = innerHeight - 2.5; // Where taper starts
+            const indent = 0.8;
+            // Define Taper Zone (clamped to avoid negative values with small innerHeight)
+            const yTaperTop = Math.max(0.5, innerHeight - 1.5); // Where full indent is reached
+            const yTaperBottom = Math.max(0, innerHeight - 2.5); // Where taper starts
 
             // Dimensions
             w_out = halfIW - outerOffset;
@@ -344,8 +341,8 @@ export function createConnectorShapes(innerWidth, innerHeight, connClearance, co
     
     // Taper/Indent Settings
     const indent = 0.8; 
-    const yTaperTop = innerHeight - 1.5; 
-    const yTaperBottom = innerHeight - 2.5;
+    const yTaperTop = Math.max(0.5, innerHeight - 1.5);
+    const yTaperBottom = Math.max(0, innerHeight - 2.5);
 
     // Outer Sleeve
     const outerSleeve = createUProfile(connClearance + connWallT, connClearance, 'outer');

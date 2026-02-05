@@ -163,7 +163,8 @@ export class ProfilePreview {
         // Clearance Label (Top Left)
         this.ctx.fillStyle = "#ffffff";
         this.ctx.textAlign = "left";
-        this.ctx.fillText(`Clearance: ${params.clearance.toFixed(2)} mm`, 10, 20);
+        const clearanceValue = this.mode === 'connector' ? params.connClearance : params.clearance;
+        this.ctx.fillText(`Clearance: ${clearanceValue.toFixed(2)} mm`, 10, 20);
     }
 
     drawDimLine(x1, y1, x2, y2, text, vertical = false) {

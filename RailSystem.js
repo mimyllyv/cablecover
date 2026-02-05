@@ -27,6 +27,8 @@ export class RailSystem {
             visuals: []
         };
 
+        this.tempGeometries = []; // Track geometries for disposal
+
         this.shapes = {
             rail: null,
             cover: null
@@ -45,10 +47,13 @@ export class RailSystem {
             this.meshes.cover = null;
         }
         this.meshes.visuals.forEach(mesh => {
-            if(mesh.geometry) mesh.geometry.dispose();
             this.scene.remove(mesh);
         });
         this.meshes.visuals = [];
+
+        // Dispose tracked temporary geometries
+        this.tempGeometries.forEach(geo => geo.dispose());
+        this.tempGeometries = [];
     }
 
     createRoundedPath(l1, l2, angleDeg, r, axis) {
@@ -174,27 +179,32 @@ export class RailSystem {
                 // Replaced path3 with manual transform to avoid ExtrudeGeometry singularities
                 const geoStart = new THREE.ExtrudeGeometry(shapeNoClaws, { steps: 1, extrudePath: path1, bevelEnabled: false });
                 const geoMid = new THREE.ExtrudeGeometry(shapeClaws, { steps: 200, extrudePath: path2, bevelEnabled: false });
-                
+
                 const geoEnd = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
-                
+
                 // Explicitly rotate based on turn params to ensure correct orientation (prevent twisting)
                 const q = new THREE.Quaternion();
                 if (params.turnAxis === 'vertical') {
-                    // Vertical turn: Rotate around X. 
+                    // Vertical turn: Rotate around X.
                     q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -theta);
                 } else {
                     // Horizontal turn: Rotate around Y.
                     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), theta);
                 }
-                
+
                 // Correction: Roll -90 degrees around Z before directional rotation to match geoMid twist
                 const qRoll = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
                 q.multiply(qRoll);
 
                 geoEnd.applyQuaternion(q);
                 geoEnd.translate(pSplit2.x, pSplit2.y, pSplit2.z);
-                
+
                 coverGeometry = BufferGeometryUtils.mergeGeometries([geoStart, geoMid, geoEnd]);
+
+                // Dispose intermediate geometries
+                geoStart.dispose();
+                geoMid.dispose();
+                geoEnd.dispose();
             } else {
                 // Too short segments -> Full No Claws
                 const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
@@ -219,16 +229,21 @@ export class RailSystem {
                 
                 // 1. Start (No Claws)
                 const geoStart = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
-                
+
                 // 2. Middle (Claws)
                 const geoMid = new THREE.ExtrudeGeometry(shapeClaws, { depth: midLen, bevelEnabled: false, steps: 1 });
                 geoMid.translate(0, 0, sleeveLen);
-                
+
                 // 3. End (No Claws)
                 const geoEnd = new THREE.ExtrudeGeometry(shapeNoClaws, { depth: sleeveLen, bevelEnabled: false, steps: 1 });
                 geoEnd.translate(0, 0, sleeveLen + midLen);
-                
+
                 coverGeometry = BufferGeometryUtils.mergeGeometries([geoStart, geoMid, geoEnd]);
+
+                // Dispose intermediate geometries
+                geoStart.dispose();
+                geoMid.dispose();
+                geoEnd.dispose();
             } else {
                 // Short segment, use No Claws entirely
                  const shapeNoClaws = createCoverShape(params.innerWidth, params.innerHeight, params.clearance, false);
@@ -248,6 +263,7 @@ export class RailSystem {
             railBrush.updateMatrixWorld();
             let resultBrush = railBrush;
             const cylinderGeo = new THREE.CylinderGeometry(params.holeDiameter / 2, params.holeDiameter / 2, 12.5, 32);
+            this.tempGeometries.push(cylinderGeo); // Track for disposal
 
             for (let i = 0; i < params.holeCount; i++) {
                 const holeBrush = new Brush(cylinderGeo, this.materials.rail);
@@ -361,7 +377,9 @@ export class RailSystem {
         exportMesh.updateMatrixWorld();
         
         // 4. Final Prep
+        const oldGeometry = exportMesh.geometry;
         exportMesh.geometry = BufferGeometryUtils.mergeVertices(exportMesh.geometry);
+        oldGeometry.dispose();
         exportMesh.geometry.computeVertexNormals();
     
         const exporter = new STLExporter();
@@ -461,16 +479,24 @@ export class RailSystem {
         // This ensures no volumetric overlap, only touching faces at Z boundaries.
         
         const mergedGeo = BufferGeometryUtils.mergeGeometries([
-            centerGeo, 
+            centerGeo,
             frontOuter, frontInner,
             backOuter, backInner
         ]);
-        
+
+        // Dispose intermediate geometries
+        centerGeo.dispose();
+        frontOuter.dispose();
+        frontInner.dispose();
+        backOuter.dispose();
+        backInner.dispose();
+
         // Optional: mergeVertices to weld the seams
         const weldedGeo = BufferGeometryUtils.mergeVertices(mergedGeo);
-        
-        const mesh = new THREE.Mesh(weldedGeo, this.materials.rail); 
-        
+        mergedGeo.dispose();
+
+        const mesh = new THREE.Mesh(weldedGeo, this.materials.rail);
+
         return mesh;
     }
 }
